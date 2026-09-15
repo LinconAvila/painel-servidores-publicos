@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: API de Consulta a Servidores Públicos
+  version: 1.0.0
+paths:
+  /api/servidores:
+    get:
+      summary: Busca servidores Públicos
+      parameters: 
+        - name: nome
+          in: query
+          schema: 
+            type: string
+        - name: cargo
+          in: query
+          schema: 
+            type: string
+        - name: uf
+          in: query
+          schema: 
+            type: string
+            minLength: 2
+            maxLength: 2
+        - name: orgao
+          in: query
+          schema: 
+            type: string
+        - name: similar
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema: 
+            type: integer
+            default: 20
+        - name: pagina
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+          "200":
+            description: Sucesso
+            content:
+              application/json: 
+                example:
+                  total: 42
+                  pagina: 1
+                  resultados:
+                    - nome: "Miguel Casarin"
+                      cargo: "Político"
+                      uf: "RS"
+                      orgao: "Ministério Rebolar"
+          "400":
+            description: Parâmetro inválido
+            content:
+              application/json:
+                example:
+                  erro: "parametro_invalido"
+                  mensagem: "UF deve ter 2 letras"
+          "404":
+            description: Nenhum registro encontrado ou página inexistente
+            content:
+              application/json:
+                example:
+                  erro: "nao_encontrado"
+                  mensagem: "Nenhum servidor encontrado para os critérios informados"
+          "429":
+            description: Excesso de requisições simultâneas
+            content:
+              application/json:
+                example:
+                  erro: "limite_excedido"
+                  mensagem: "Muitas requisições, tente novamente em instantes"
+          "504":
+            description: Timeout na busca
+            content:
+              application/json:
+                example:
+                  erro: "timeout"
+                  mensagem: "A busca excedeu o tempo limite"
