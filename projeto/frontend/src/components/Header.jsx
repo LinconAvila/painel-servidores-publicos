@@ -2,27 +2,31 @@ import React from 'react';
 
 export function Header() {
   return (
-    <header className="app-header">
-      <div className="header-container">
+    <header className="main-header">
+      <div className="header-content">
         <svg
-          className="header-icon"
+          width="22"
+          height="22"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          className="header-icon"
         >
-          <path d="M3 21h18" />
-          <path d="M3 10h18" />
-          <path d="M5 6l7-3 7 3" />
-          <path d="M4 10v11" />
-          <path d="M20 10v11" />
-          <path d="M8 10v11" />
-          <path d="M12 10v11" />
-          <path d="M16 10v11" />
+          <path
+            d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v4M12 14v4M16 14v4"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
-        <h1 className="header-title">Painel de Servidores Públicos</h1>
+        <div>
+          <span className="header-title">
+            Painel de Servidores Públicos
+          </span>
+        </div>
+        <div className="header-badge">
+          <span>SIAPE</span>
+        </div>
       </div>
     </header>
   );

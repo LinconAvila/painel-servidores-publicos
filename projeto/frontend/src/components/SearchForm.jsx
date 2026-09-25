@@ -1,80 +1,102 @@
 import React from 'react';
 
 const UFS = [
-  'Todas', 'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 
-  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 
-  'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+  'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA',
+  'MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN',
+  'RO','RR','RS','SC','SE','SP','TO'
 ];
 
-export function SearchForm() {
+export function SearchForm({
+  nome, setNome,
+  cargo, setCargo,
+  uf, setUf,
+  orgao, setOrgao,
+  similaridade, setSimilaridade,
+  onBuscar, onClear
+}) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onBuscar();
+  };
+
   return (
-    <div className="search-card">
-      <h2 className="search-card-title">FILTROS DE BUSCA</h2>
-      
-      <form onSubmit={(e) => e.preventDefault()} className="search-form">
+    <div className="filter-card">
+      <h2 className="filter-card-title">Filtros de busca</h2>
+
+      <form onSubmit={handleSubmit}>
         <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="nome">Nome</label>
+          <div className="field-group">
+            <label className="field-label" htmlFor="nome">Nome</label>
             <input
-              type="text"
               id="nome"
-              placeholder="João da Silva"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="cargo">Cargo</label>
-            <input
               type="text"
-              id="cargo"
-              placeholder="Analista"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="João da Silva"
+              className="field-input"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="uf">UF</label>
-            <select id="uf" defaultValue="Todas">
-              {UFS.map((uf) => (
-                <option key={uf} value={uf}>
-                  {uf}
-                </option>
+          <div className="field-group">
+            <label className="field-label" htmlFor="cargo">Cargo</label>
+            <input
+              id="cargo"
+              type="text"
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
+              placeholder="Analista"
+              className="field-input"
+            />
+          </div>
+
+          <div className="field-group">
+            <label className="field-label" htmlFor="uf">UF</label>
+            <select
+              id="uf"
+              value={uf}
+              onChange={(e) => setUf(e.target.value)}
+              className="field-select"
+              style={{ color: uf ? '#1C1C1E' : '#9CA3AF' }}
+            >
+              <option value="">Todas</option>
+              {UFS.map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="orgao">Órgão</label>
+          <div className="field-group">
+            <label className="field-label" htmlFor="orgao">Órgão</label>
             <input
-              type="text"
               id="orgao"
+              type="text"
+              value={orgao}
+              onChange={(e) => setOrgao(e.target.value)}
               placeholder="Ministério da Fazenda"
+              className="field-input"
             />
           </div>
         </div>
 
-        <div className="form-footer">
-          <label className="checkbox-container">
-            <input type="checkbox" id="similaridade" />
-            <span>Busca por similaridade</span>
+        <div className="form-actions">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={similaridade}
+              onChange={(e) => setSimilaridade(e.target.checked)}
+              className="checkbox-input"
+            />
+            <span className="checkbox-text">Busca por similaridade</span>
           </label>
 
           <div className="button-group">
-            <button type="button" className="btn-secondary">
+            <button type="button" onClick={onClear} className="btn-clear">
               Limpar
             </button>
-            <button type="submit" className="btn-primary">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <button type="submit" className="btn-submit">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5.5" stroke="white" strokeWidth="1.4" />
+                <path d="M11 11l3 3" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
               Buscar
             </button>
