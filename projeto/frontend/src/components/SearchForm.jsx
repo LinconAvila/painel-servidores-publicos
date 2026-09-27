@@ -12,7 +12,8 @@ export function SearchForm({
   uf, setUf,
   orgao, setOrgao,
   similaridade, setSimilaridade,
-  onBuscar, onClear
+  onBuscar, onClear,
+  erroApi, mensagemErro
 }) {
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -22,6 +23,32 @@ export function SearchForm({
   return (
     <div className="filter-card">
       <h2 className="filter-card-title">Filtros de busca</h2>
+
+      {erroApi === 'timeout' && (
+        <div className="alert-banner warning">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8.5" stroke="#92701A" strokeWidth="1.5" />
+            <path d="M10 6v4l2.5 2" stroke="#92701A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div>
+            <p className="alert-title">A busca demorou demais</p>
+            <p className="alert-desc">{mensagemErro || 'Tente usar filtros mais específicos para reduzir o volume de resultados.'}</p>
+          </div>
+        </div>
+      )}
+
+      {(erroApi === 'parametro_invalido' || erroApi === 'conexao') && (
+        <div className="alert-banner error">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8.5" stroke="#DC2626" strokeWidth="1.5" />
+            <path d="M10 6v5M10 13.5v.5" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <div>
+            <p className="alert-title">{erroApi === 'conexao' ? 'Erro de conexão' : 'Erro de validação'}</p>
+            <p className="alert-desc">{mensagemErro}</p>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="form-grid">

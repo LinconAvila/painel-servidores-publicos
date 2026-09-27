@@ -6,6 +6,7 @@ import { Pagination } from './Pagination';
 export function ResultsArea({
   resultados,
   submitted,
+  loading,
   page,
   totalPages,
   onPageChange,
@@ -13,6 +14,18 @@ export function ResultsArea({
   onClear,
 }) {
   if (!submitted) return null;
+
+  if (loading) {
+    return (
+      <div className="results-container">
+        <div className="skeleton-list">
+          <div className="skeleton-item" />
+          <div className="skeleton-item" />
+          <div className="skeleton-item" />
+        </div>
+      </div>
+    );
+  }
 
   if (resultados.length === 0) {
     return <EmptyState onClear={onClear} />;
