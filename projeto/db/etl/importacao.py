@@ -1,17 +1,22 @@
 import psycopg2
 import csv
+import os
+from dotenv import load_dotenv
 
-DB_HOST = "localhost"
-DB_PORT = "5432"
-DB_NAME = ""
-DB_USER = ""
-DB_PASS = ""
+# Carrega as credenciais do arquivo .env
+load_dotenv()
+
+DB_HOST = os.getenv("POSTGRES_HOST")
+DB_PORT = os.getenv("POSTGRES_PORT")
+DB_NAME = os.getenv("POSTGRES_DB")
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
 
 CSV_APOSENTADOS = "aposentados_limpo.csv"
 CSV_ATIVOS = "carreira_limpo.csv"
 
 # Variável de controle: True insere apenas 20 linhas, False insere tudo
-AMOSTRA = True 
+AMOSTRA = False
 
 COLUNS_CSV_ATIVOS = ["nome", "cpf", "codigo_carreira", "descricao_cargo", "uf_upag", "orgao", "valor_remuneracao"]
 COLUNS_CSV_APOSENTADOS = ["nome", "cpf", "matricula", "orgao", "sigla_orgao", "cargo", "tipo_aposentaroria", "publicacao_diploma_legal", "tipo_ingresso", "data_ingresso", "remuneracao"]
@@ -29,6 +34,14 @@ def insert_data():
         )
 
         cursor = conection.cursor()
+
+        # Limpa as tabelas antes de iniciar a importação para evitar duplicidade
+        print("Limpando dados antigos...")
+        cursor.execute("TRUNCATE TABLE servidores_ativos, servidores_aposentados RESTART IDENTITY CASCADE;")
+        conection.commit()
+
+        # === INSERINDO SERVIDORES ATIVOS ===
+        print("Inserindo dados na tabela servidores_ativos...")
 
         # === INSERINDO SERVIDORES ATIVOS ===
         print("Inserindo dados na tabela servidores_ativos...")
