@@ -46,9 +46,9 @@ def fetch_servidores_by_name(nome):
     sql = (
         "SELECT nome, cargo, uf, orgao "
         "FROM servidores "
-        "WHERE LOWER(nome) = LOWER({}) "
+        f"WHERE LOWER(nome) = LOWER({placeholder}) "
         "ORDER BY nome ASC"
-    ).format(placeholder)
+    )
 
     conn = build_db_connection()
     try:
