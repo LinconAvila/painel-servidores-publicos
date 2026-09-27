@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import unicodedata
 from urllib.parse import urlparse
 
 import psycopg2
@@ -67,6 +68,83 @@ def fetch_servidores_by_name(nome):
         conn.close()
 
 
+def normalize_text(value):
+    if value is None:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", value)
+    sem_acento = "".join(ch for ch in nfkd if not unicodedata.combining(ch))
+    return sem_acento.strip().lower()
+
+
+def fetch_distinct_values(coluna):
+    if coluna not in ("cargo", "uf"):
+        raise ValueError("coluna inválida")
+    conn = build_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT DISTINCT {coluna} FROM servidores")
+        return [row[0] for row in cursor.fetchall() if row[0] is not None]
+    finally:
+        conn.close()
+
+
+def resolve_valor_real(valor_usuario, coluna):
+    """Encontra o valor original no banco correspondente ao valor
+    informado pelo usuário, ignorando caixa e acentuação.
+    Retorna o valor original do banco, ou None se não existir."""
+    valores_distintos = fetch_distinct_values(coluna)
+    alvo_normalizado = normalize_text(valor_usuario)
+    for valor_original in valores_distintos:
+        if normalize_text(valor_original) == alvo_normalizado:
+            return valor_original
+    return None
+
+
+UFS_VALIDAS = {
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+    "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+    "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+}
+
+
+def validar_uf_formato(uf):
+    return uf.upper() in UFS_VALIDAS
+
+
+def fetch_servidores_by_column(coluna, valor_real, pagina, limit):
+    if coluna not in ("cargo", "uf"):
+        raise ValueError("coluna inválida")
+    driver = get_database_driver()
+    placeholder = "?" if driver == "sqlite" else "%s"
+    offset = (pagina - 1) * limit
+
+    condicao = f"UPPER({coluna}) = UPPER({placeholder})" if coluna == "uf" else f"{coluna} = {placeholder}"
+    sql_count = f"SELECT COUNT(*) FROM servidores WHERE {condicao}"
+    sql = (
+        f"SELECT nome, cargo, uf, orgao "
+        f"FROM servidores "
+        f"WHERE {condicao} "
+        f"ORDER BY nome ASC "
+        f"LIMIT {placeholder} OFFSET {placeholder}"
+    )
+
+    conn = build_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql_count, (valor_real,))
+        total = cursor.fetchone()[0]
+
+        cursor.execute(sql, (valor_real, limit, offset))
+        rows = cursor.fetchall()
+        resultados = [
+            {"nome": row[0], "cargo": row[1], "uf": row[2], "orgao": row[3]}
+            for row in rows
+        ]
+        return total, resultados
+    finally:
+        conn.close()
+
+
 @app.route("/health")
 def health():
     return {"status": "ok"}, 200
@@ -75,39 +153,73 @@ def health():
 @app.route("/api/servidores")
 def buscar_servidores():
     nome = request.args.get("nome")
+    cargo = request.args.get("cargo")
+    uf = request.args.get("uf")
     pagina = request.args.get("pagina", default=1, type=int)
     limit = request.args.get("limit", default=20, type=int)
-
-    if nome is None or nome.strip() == "":
-        return {"erro": "parametro_invalido", "mensagem": "nome é obrigatório"}, 400
 
     if pagina is None or pagina < 1:
         return {"erro": "parametro_invalido", "mensagem": "pagina deve ser maior que zero"}, 400
     if limit is None or limit < 1:
         return {"erro": "parametro_invalido", "mensagem": "limit deve ser maior que zero"}, 400
 
-    try:
-        resultados = fetch_servidores_by_name(nome)
-    except ValueError as exc:
-        return {"erro": "parametro_invalido", "mensagem": str(exc)}, 400
-    except (sqlite3.Error, psycopg2.Error):
-        return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+    # Busca por nome (correspondência exata, identificador único)
+    if nome is not None and nome.strip() != "":
+        try:
+            resultados = fetch_servidores_by_name(nome)
+        except ValueError as exc:
+            return {"erro": "parametro_invalido", "mensagem": str(exc)}, 400
+        except (sqlite3.Error, psycopg2.Error):
+            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
 
-    if not resultados:
-        return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
+        if not resultados:
+            return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
 
-    if len(resultados) == 1:
-        return resultados[0], 200
+        if len(resultados) == 1:
+            return resultados[0], 200
 
-    total = len(resultados)
-    start = (pagina - 1) * limit
-    end = start + limit
-    pagina_resultados = resultados[start:end]
+        total = len(resultados)
+        start = (pagina - 1) * limit
+        end = start + limit
+        pagina_resultados = resultados[start:end]
 
-    if start >= total:
-        return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
+        if start >= total:
+            return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
 
-    return {"total": total, "pagina": pagina, "resultados": pagina_resultados}, 200
+        return {"total": total, "pagina": pagina, "resultados": pagina_resultados}, 200
+
+    # Busca por UF (categoria, validada contra lista fixa de siglas, case-insensitive)
+    if uf is not None and uf.strip() != "":
+        uf_limpo = uf.strip().upper()
+        if not validar_uf_formato(uf_limpo):
+            return {"erro": "parametro_invalido", "mensagem": "UF deve ser uma sigla válida de 2 letras"}, 400
+
+        try:
+            total, resultados = fetch_servidores_by_column("uf", uf_limpo, pagina, limit)
+        except (sqlite3.Error, psycopg2.Error):
+            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+
+        return {"total": total, "pagina": pagina, "resultados": resultados}, 200
+
+    # Busca por cargo (categoria, validado contra cargos existentes, case/acento-insensitive)
+    if cargo is not None and cargo.strip() != "":
+        cargo_limpo = cargo.strip()
+        try:
+            cargo_real = resolve_valor_real(cargo_limpo, "cargo")
+        except (sqlite3.Error, psycopg2.Error):
+            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+
+        if cargo_real is None:
+            return {"erro": "parametro_invalido", "mensagem": "Cargo não corresponde a nenhum registro cadastrado"}, 400
+
+        try:
+            total, resultados = fetch_servidores_by_column("cargo", cargo_real, pagina, limit)
+        except (sqlite3.Error, psycopg2.Error):
+            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+
+        return {"total": total, "pagina": pagina, "resultados": resultados}, 200
+
+    return {"erro": "parametro_invalido", "mensagem": "informe ao menos um parâmetro de busca (nome, cargo ou uf)"}, 400
 
 
 if __name__ == "__main__":

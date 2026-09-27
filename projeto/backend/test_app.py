@@ -27,6 +27,8 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
                 ("Miguel Casarin", "Servidor", "SP", "Tribunal"),
                 ("Miguel Casarin", "Diretor", "PR", "Secretaria"),
                 ("Maria Oliveira", "Técnica", "RJ", "INSS"),
+                ("Ana Souza", "Analista", "SP", "Receita Federal"),
+                ("Carlos Pereira", "Analista", "RS", "Ministério da Fazenda"),
             ],
         )
         conn.commit()
@@ -136,9 +138,79 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
                 conn = sqlite3.connect(self.db_path)
                 try:
                     count = conn.execute("SELECT COUNT(*) FROM servidores").fetchone()[0]
-                    self.assertEqual(count, 5)
+                    self.assertEqual(count, 7)
                 finally:
                     conn.close()
+
+    def test_uf_valida_sem_resultado_retorna_200_vazio(self):
+        response = self.client.get("/api/servidores?uf=BA")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["resultados"], [])
+
+    def test_uf_formato_invalido_retorna_400(self):
+        response = self.client.get("/api/servidores?uf=XX")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+        response = self.client.get("/api/servidores?uf=RSS")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+        response = self.client.get("/api/servidores?uf=1A")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+    def test_uf_e_case_insensitive(self):
+        response = self.client.get("/api/servidores?uf=rs")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 2)
+
+    def test_uf_com_multiplos_resultados_retorna_paginacao(self):
+        response = self.client.get("/api/servidores?uf=SP&pagina=1&limit=2")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(payload["pagina"], 1)
+        self.assertEqual(len(payload["resultados"]), 2)
+
+        response = self.client.get("/api/servidores?uf=SP&pagina=2&limit=2")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(len(payload["resultados"]), 1)
+
+    def test_cargo_inexistente_retorna_400(self):
+        response = self.client.get("/api/servidores?cargo=Astronauta")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+    def test_cargo_e_case_e_acento_insensitive(self):
+        response = self.client.get("/api/servidores?cargo=politico")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["resultados"][0]["nome"], "Miguel Casarin")
+
+        response = self.client.get("/api/servidores?cargo=POLITICO")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["total"], 1)
+
+    def test_cargo_com_multiplos_resultados_retorna_paginacao(self):
+        response = self.client.get("/api/servidores?cargo=Analista&pagina=1&limit=2")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(payload["pagina"], 1)
+        self.assertEqual(len(payload["resultados"]), 2)
+
+        response = self.client.get("/api/servidores?cargo=Analista&pagina=2&limit=2")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(len(payload["resultados"]), 1)
 
 
 if __name__ == "__main__":
