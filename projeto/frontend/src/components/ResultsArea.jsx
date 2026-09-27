@@ -13,6 +13,7 @@ export function ResultsArea({
   onPageChange,
   onSelectServidor,
   onClear,
+  mensagemErro,
 }) {
   if (!submitted) return null;
 
@@ -29,7 +30,7 @@ export function ResultsArea({
   }
 
   if (resultados.length === 0) {
-    return <EmptyState onClear={onClear} />;
+    return <EmptyState mensagem={mensagemErro} onClear={onClear} />;
   }
 
   return (
