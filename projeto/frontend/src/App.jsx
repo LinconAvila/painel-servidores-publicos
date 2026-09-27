@@ -1,61 +1,118 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { SearchForm } from './components/SearchForm';
 import { ResultsArea } from './components/ResultsArea';
 import { DetailView } from './components/DetailView';
-import { SERVIDORES_MOCK } from './data/servidoresMock';
 import './App.css';
 
 const PAGE_SIZE = 5;
 
-function normalizar(str) {
-  if (!str) return '';
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
 function App() {
-  const [view, setView] = useState('search');
+  const [view, setView] = useState('search'); // 'search' | 'detail'
   const [selectedServidor, setSelectedServidor] = useState(null);
 
-  // Estados dos campos de entrada (o que você digita)
+  // Estados dos campos do formulário
   const [nome, setNome] = useState('');
   const [cargo, setCargo] = useState('');
   const [uf, setUf] = useState('');
   const [orgao, setOrgao] = useState('');
   const [similaridade, setSimilaridade] = useState(false);
 
-  // Filtros aplicados na busca (atualizam APENAS no clique em Buscar)
-  const [appliedFilters, setAppliedFilters] = useState(null);
+  // Estados da resposta da API
+  const [resultados, setResultados] = useState([]);
+  const [totalResultados, setTotalResultados] = useState(0);
   const [page, setPage] = useState(1);
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [erroApi, setErroApi] = useState(null); // 'parametro_invalido' | 'timeout' | null
+  const [mensagemErro, setMensagemErro] = useState('');
 
-  const resultados = useMemo(() => {
-    if (!appliedFilters) return [];
-    const n = normalizar(appliedFilters.nome);
-    const c = normalizar(appliedFilters.cargo);
-    const o = normalizar(appliedFilters.orgao);
+  const fetchServidores = async (nomeParaBuscar, paginaAtual = 1) => {
+    if (!nomeParaBuscar || nomeParaBuscar.trim() === '') {
+      setErroApi('parametro_invalido');
+      setMensagemErro('Informe um nome para realizar a busca.');
+      setSubmitted(true);
+      setResultados([]);
+      return;
+    }
 
-    return SERVIDORES_MOCK.filter((s) => {
-      const nomeMatch = n === '' || normalizar(s.nome).includes(n);
-      const cargoMatch = c === '' || normalizar(s.cargo).includes(c);
-      const ufMatch = appliedFilters.uf === '' || (s.uf || '').toLowerCase() === appliedFilters.uf.toLowerCase();
-      const orgaoMatch = o === '' || normalizar(s.orgao).includes(o);
-      return nomeMatch && cargoMatch && ufMatch && orgaoMatch;
-    });
-  }, [appliedFilters]);
+    setLoading(true);
+    setErroApi(null);
+    setMensagemErro('');
+    setSubmitted(true);
 
-  const totalPages = Math.max(1, Math.ceil(resultados.length / PAGE_SIZE));
-  const paginatedResultados = resultados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    try {
+      const url = `/api/servidores?nome=${encodeURIComponent(nomeParaBuscar.trim())}&pagina=${paginaAtual}&limit=${PAGE_SIZE}`;
+      const response = await fetch(url);
+      const data = await response.json();
 
-  // Disparado APENAS ao clicar no botão Buscar ou dar Enter
+      if (response.status === 200) {
+        // Caso 1: Resultado Único (a API retorna o objeto do servidor diretamente)
+        if (data.nome && !data.resultados) {
+          const servidorUnico = {
+            id: 1,
+            nome: data.nome,
+            cargo: data.cargo,
+            uf: data.uf,
+            orgao: data.orgao,
+            status: 'Ativo',
+            matricula: '****' + Math.floor(1000 + Math.random() * 9000),
+          };
+          setSelectedServidor(servidorUnico);
+          setView('detail');
+          setResultados([servidorUnico]);
+          setTotalResultados(1);
+        } else {
+          // Caso 2: Múltiplos Resultados (a API retorna { total, pagina, resultados: [...] })
+          const listaFormatada = (data.resultados || []).map((item, idx) => ({
+            id: (paginaAtual - 1) * PAGE_SIZE + idx + 1,
+            nome: item.nome,
+            cargo: item.cargo,
+            uf: item.uf,
+            orgao: item.orgao,
+            status: 'Ativo',
+            matricula: '****' + Math.floor(1000 + Math.random() * 9000),
+          }));
+          setResultados(listaFormatada);
+          setTotalResultados(data.total || listaFormatada.length);
+          setPage(data.pagina || paginaAtual);
+        }
+      } else if (response.status === 404) {
+        // Nenhum resultado encontrado
+        setResultados([]);
+        setTotalResultados(0);
+      } else if (response.status === 400) {
+        // Parâmetro inválido
+        setErroApi('parametro_invalido');
+        setMensagemErro(data.mensagem || 'Parâmetro de busca inválido.');
+        setResultados([]);
+      } else if (response.status === 504) {
+        // Timeout
+        setErroApi('timeout');
+        setMensagemErro(data.mensagem || 'A busca demorou demais.');
+        setResultados([]);
+      } else {
+        setErroApi('generico');
+        setMensagemErro(data.mensagem || 'Ocorreu um erro ao consultar o servidor.');
+        setResultados([]);
+      }
+    } catch (err) {
+      setErroApi('conexao');
+      setMensagemErro('Não foi possível conectar ao servidor da API.');
+      setResultados([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBuscar = () => {
-    setAppliedFilters({
-      nome,
-      cargo,
-      uf,
-      orgao,
-      similaridade,
-    });
     setPage(1);
+    fetchServidores(nome, 1);
+  };
+
+  const handlePageChange = (novaPagina) => {
+    setPage(novaPagina);
+    fetchServidores(nome, novaPagina);
   };
 
   const handleClear = () => {
@@ -64,7 +121,11 @@ function App() {
     setUf('');
     setOrgao('');
     setSimilaridade(false);
-    setAppliedFilters(null);
+    setSubmitted(false);
+    setResultados([]);
+    setTotalResultados(0);
+    setErroApi(null);
+    setMensagemErro('');
     setPage(1);
   };
 
@@ -72,6 +133,8 @@ function App() {
     setSelectedServidor(servidor);
     setView('detail');
   };
+
+  const totalPages = Math.max(1, Math.ceil(totalResultados / PAGE_SIZE));
 
   if (view === 'detail' && selectedServidor) {
     return (
@@ -97,13 +160,16 @@ function App() {
           similaridade={similaridade} setSimilaridade={setSimilaridade}
           onBuscar={handleBuscar}
           onClear={handleClear}
+          erroApi={erroApi}
+          mensagemErro={mensagemErro}
         />
         <ResultsArea
-          resultados={paginatedResultados}
-          submitted={Boolean(appliedFilters)}
+          resultados={resultados}
+          submitted={submitted}
+          loading={loading}
           page={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={handlePageChange}
           onSelectServidor={handleSelectServidor}
           onClear={handleClear}
         />
