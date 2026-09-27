@@ -5,6 +5,7 @@ import { Pagination } from './Pagination';
 
 export function ResultsArea({
   resultados,
+  totalResultados,
   submitted,
   loading,
   page,
@@ -35,7 +36,7 @@ export function ResultsArea({
     <div className="results-container">
       <div className="results-meta">
         <span className="results-count">
-          {resultados.length} {resultados.length === 1 ? 'resultado' : 'resultados'}
+          {totalResultados} {totalResultados === 1 ? 'resultado' : 'resultados'}
         </span>
         {totalPages > 1 && (
           <span className="results-pages-info">

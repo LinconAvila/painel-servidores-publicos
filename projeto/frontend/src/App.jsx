@@ -5,10 +5,11 @@ import { ResultsArea } from './components/ResultsArea';
 import { DetailView } from './components/DetailView';
 import './App.css';
 
+// Tamanho padrão de registros por página da aplicação
 const PAGE_SIZE = 5;
 
 function App() {
-  const [view, setView] = useState('search'); // 'search' | 'detail'
+  const [view, setView] = useState('search');
   const [selectedServidor, setSelectedServidor] = useState(null);
 
   // Estados dos campos do formulário
@@ -24,7 +25,7 @@ function App() {
   const [page, setPage] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [erroApi, setErroApi] = useState(null); // 'parametro_invalido' | 'timeout' | null
+  const [erroApi, setErroApi] = useState(null);
   const [mensagemErro, setMensagemErro] = useState('');
 
   const fetchServidores = async (nomeParaBuscar, paginaAtual = 1) => {
@@ -33,6 +34,7 @@ function App() {
       setMensagemErro('Informe um nome para realizar a busca.');
       setSubmitted(true);
       setResultados([]);
+      setTotalResultados(0);
       return;
     }
 
@@ -47,8 +49,8 @@ function App() {
       const data = await response.json();
 
       if (response.status === 200) {
-        // Caso 1: Resultado Único (a API retorna o objeto do servidor diretamente)
         if (data.nome && !data.resultados) {
+          // Resultado único direto para tela de detalhe
           const servidorUnico = {
             id: 1,
             nome: data.nome,
@@ -63,7 +65,7 @@ function App() {
           setResultados([servidorUnico]);
           setTotalResultados(1);
         } else {
-          // Caso 2: Múltiplos Resultados (a API retorna { total, pagina, resultados: [...] })
+          // Múltiplos resultados com metadados de paginação
           const listaFormatada = (data.resultados || []).map((item, idx) => ({
             id: (paginaAtual - 1) * PAGE_SIZE + idx + 1,
             nome: item.nome,
@@ -78,38 +80,41 @@ function App() {
           setPage(data.pagina || paginaAtual);
         }
       } else if (response.status === 404) {
-        // Nenhum resultado encontrado
         setResultados([]);
         setTotalResultados(0);
       } else if (response.status === 400) {
-        // Parâmetro inválido
         setErroApi('parametro_invalido');
         setMensagemErro(data.mensagem || 'Parâmetro de busca inválido.');
         setResultados([]);
+        setTotalResultados(0);
       } else if (response.status === 504) {
-        // Timeout
         setErroApi('timeout');
         setMensagemErro(data.mensagem || 'A busca demorou demais.');
         setResultados([]);
+        setTotalResultados(0);
       } else {
         setErroApi('generico');
         setMensagemErro(data.mensagem || 'Ocorreu um erro ao consultar o servidor.');
         setResultados([]);
+        setTotalResultados(0);
       }
     } catch (err) {
       setErroApi('conexao');
       setMensagemErro('Não foi possível conectar ao servidor da API.');
       setResultados([]);
+      setTotalResultados(0);
     } finally {
       setLoading(false);
     }
   };
 
+  // Ao disparar nova busca, reseta SEMPRE para a página 1
   const handleBuscar = () => {
     setPage(1);
     fetchServidores(nome, 1);
   };
 
+  // Navegação entre páginas
   const handlePageChange = (novaPagina) => {
     setPage(novaPagina);
     fetchServidores(nome, novaPagina);
@@ -165,6 +170,7 @@ function App() {
         />
         <ResultsArea
           resultados={resultados}
+          totalResultados={totalResultados}
           submitted={submitted}
           loading={loading}
           page={page}
