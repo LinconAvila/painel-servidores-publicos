@@ -82,6 +82,8 @@ function App() {
       } else if (response.status === 404) {
         setResultados([]);
         setTotalResultados(0);
+        setErroApi(null);
+        setMensagemErro(data.mensagem || 'Nenhum servidor encontrado para os critérios informados');
       } else if (response.status === 400) {
         setErroApi('parametro_invalido');
         setMensagemErro(data.mensagem || 'Parâmetro de busca inválido.');
@@ -98,7 +100,7 @@ function App() {
         setResultados([]);
         setTotalResultados(0);
       }
-    } catch (err) {
+    } catch (_err) {
       setErroApi('conexao');
       setMensagemErro('Não foi possível conectar ao servidor da API.');
       setResultados([]);
@@ -158,27 +160,30 @@ function App() {
       <Header />
       <main className="main-content">
         <SearchForm
-          nome={nome} setNome={setNome}
-          cargo={cargo} setCargo={setCargo}
-          uf={uf} setUf={setUf}
-          orgao={orgao} setOrgao={setOrgao}
-          similaridade={similaridade} setSimilaridade={setSimilaridade}
+          nome={nome} setNome={(v) => { setNome(v); setPage(1); }}
+          cargo={cargo} setCargo={(v) => { setCargo(v); setPage(1); }}
+          uf={uf} setUf={(v) => { setUf(v); setPage(1); }}
+          orgao={orgao} setOrgao={(v) => { setOrgao(v); setPage(1); }}
+          similaridade={similaridade} setSimilaridade={(v) => { setSimilaridade(v); setPage(1); }}
           onBuscar={handleBuscar}
           onClear={handleClear}
           erroApi={erroApi}
           mensagemErro={mensagemErro}
         />
-        <ResultsArea
-          resultados={resultados}
-          totalResultados={totalResultados}
-          submitted={submitted}
-          loading={loading}
-          page={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          onSelectServidor={handleSelectServidor}
-          onClear={handleClear}
-        />
+        {!erroApi && (
+          <ResultsArea
+            resultados={resultados}
+            totalResultados={totalResultados}
+            submitted={submitted}
+            loading={loading}
+            page={page}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            onSelectServidor={handleSelectServidor}
+            onClear={handleClear}
+            mensagemErro={mensagemErro}
+          />
+        )}
       </main>
     </div>
   );
