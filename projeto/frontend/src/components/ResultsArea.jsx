@@ -5,24 +5,39 @@ import { Pagination } from './Pagination';
 
 export function ResultsArea({
   resultados,
+  totalResultados,
   submitted,
+  loading,
   page,
   totalPages,
   onPageChange,
   onSelectServidor,
   onClear,
+  mensagemErro,
 }) {
   if (!submitted) return null;
 
+  if (loading) {
+    return (
+      <div className="results-container">
+        <div className="skeleton-list">
+          <div className="skeleton-item" />
+          <div className="skeleton-item" />
+          <div className="skeleton-item" />
+        </div>
+      </div>
+    );
+  }
+
   if (resultados.length === 0) {
-    return <EmptyState onClear={onClear} />;
+    return <EmptyState mensagem={mensagemErro} onClear={onClear} />;
   }
 
   return (
     <div className="results-container">
       <div className="results-meta">
         <span className="results-count">
-          {resultados.length} {resultados.length === 1 ? 'resultado' : 'resultados'}
+          {totalResultados} {totalResultados === 1 ? 'resultado' : 'resultados'}
         </span>
         {totalPages > 1 && (
           <span className="results-pages-info">

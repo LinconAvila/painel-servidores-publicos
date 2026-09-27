@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function EmptyState({ onClear }) {
+export function EmptyState({ mensagem, onClear }) {
   return (
     <div className="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="empty-icon">
@@ -10,7 +10,7 @@ export function EmptyState({ onClear }) {
       </svg>
       <h3 className="empty-title">Nenhum servidor encontrado</h3>
       <p className="empty-desc">
-        Nenhum resultado corresponde aos filtros aplicados. Tente termos mais amplos ou limpe os filtros.
+        {mensagem || 'Nenhum resultado corresponde aos critérios informados.'}
       </p>
       <button onClick={onClear} className="btn-clear-empty">
         Limpar filtros
