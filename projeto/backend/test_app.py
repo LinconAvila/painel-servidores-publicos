@@ -354,5 +354,183 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
         self.assertEqual(len(payload["resultados"]), 1)
 
 
+class SimilarEndpointTests(unittest.TestCase):
+    """Busca por similaridade (?similar=&limit=), com dataset próprio."""
+
+    BASE = [
+        ("MARIA DA SILVA", "Analista", "SP", "INSS"),
+        ("MARIA SILVA SANTOS", "Analista", "RS", "INSS"),
+        ("MARIA APARECIDA DA SILVA", "Tecnica", "SP", "MEC"),
+        ("JOSE SILVA", "Analista", "SP", "MEC"),
+        ("SILVANA COSTA", "Analista", "RJ", "MEC"),
+        ("CARLOS PEREIRA", "Analista", "SP", "INSS"),
+        ("ANA SOUZA", "Analista", "SP", "INSS"),
+    ]
+
+    def setUp(self):
+        fd, self.db_path = tempfile.mkstemp(prefix="servidores_similar_", suffix=".db")
+        os.close(fd)
+        self.original_database_url = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
+
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            "CREATE TABLE servidores (nome TEXT, cargo TEXT, uf TEXT, orgao TEXT)"
+        )
+        conn.commit()
+        conn.close()
+        self.inserir(self.BASE)
+        self.client = app.app.test_client()
+
+    def tearDown(self):
+        if self.original_database_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = self.original_database_url
+        os.remove(self.db_path)
+
+    def inserir(self, linhas):
+        conn = sqlite3.connect(self.db_path)
+        conn.executemany(
+            "INSERT INTO servidores (nome, cargo, uf, orgao) VALUES (?, ?, ?, ?)",
+            linhas,
+        )
+        conn.commit()
+        conn.close()
+
+    def inserir_servidores_numerados(self, quantidade):
+        self.inserir(
+            [(f"SERVIDOR {i:03d}", "Analista", "SP", "INSS") for i in range(quantidade)]
+        )
+
+    @staticmethod
+    def nomes(response):
+        return [r["nome"] for r in response.get_json()["resultados"]]
+
+    def buscar(self, **params):
+        return self.client.get("/api/servidores", query_string=params)
+
+    def test_similar_vazio_ou_curto_retorna_400(self):
+        for valor in ("", "   ", "a", "%a%", "%%", " % "):
+            with self.subTest(valor=valor):
+                response = self.buscar(similar=valor)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+    def test_similar_sem_curinga_busca_por_trecho_do_nome(self):
+        response = self.buscar(similar="silva")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(self.nomes(response)),
+            {
+                "MARIA DA SILVA",
+                "MARIA SILVA SANTOS",
+                "MARIA APARECIDA DA SILVA",
+                "JOSE SILVA",
+                "SILVANA COSTA",
+            },
+        )
+
+    def test_similar_ordena_do_mais_parecido_para_o_menos(self):
+        nomes = self.nomes(self.buscar(similar="silva"))
+        self.assertEqual(nomes[0], "JOSE SILVA")
+        notas = [app.trigram_similarity(n, "silva") for n in nomes]
+        self.assertEqual(notas, sorted(notas, reverse=True))
+
+    def test_similar_respeita_curingas_informados_pelo_usuario(self):
+        marias = {"MARIA DA SILVA", "MARIA SILVA SANTOS", "MARIA APARECIDA DA SILVA"}
+        casos = {
+            "MARIA%": marias,
+            "%MARIA%SILVA%": marias,
+            "MARIA%SILVA": {"MARIA DA SILVA", "MARIA APARECIDA DA SILVA"},
+            "MARIA SILVA%": {"MARIA SILVA SANTOS"},
+            "%SILVA": {"MARIA DA SILVA", "MARIA APARECIDA DA SILVA", "JOSE SILVA"},
+        }
+        for padrao, esperado in casos.items():
+            with self.subTest(padrao=padrao):
+                response = self.buscar(similar=padrao)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(set(self.nomes(response)), esperado)
+
+    def test_similar_nao_trata_underscore_como_curinga(self):
+        # Sem escape, "SILV_" casaria com SILVA.
+        response = self.buscar(similar="SILV_")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["total"], 0)
+
+    def test_similar_sem_resultado_retorna_200_vazio(self):
+        response = self.buscar(similar="zzzz")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["resultados"], [])
+
+    def test_similar_combinado_com_outros_filtros(self):
+        response = self.buscar(similar="silva", uf="SP")
+        self.assertEqual(
+            set(self.nomes(response)),
+            {"MARIA DA SILVA", "MARIA APARECIDA DA SILVA", "JOSE SILVA"},
+        )
+
+        response = self.buscar(similar="silva", uf="SP", cargo="Analista")
+        self.assertEqual(set(self.nomes(response)), {"MARIA DA SILVA", "JOSE SILVA"})
+
+    def test_similar_mantem_validacao_de_uf_e_cargo(self):
+        self.assertEqual(self.buscar(similar="silva", uf="XX").status_code, 400)
+        self.assertEqual(self.buscar(similar="silva", cargo="Astronauta").status_code, 400)
+
+    def test_similar_total_e_a_quantidade_devolvida(self):
+        payload = self.buscar(similar="silva").get_json()
+        self.assertEqual(payload["total"], len(payload["resultados"]))
+        self.assertEqual(payload["pagina"], 1)
+
+    def test_similar_sem_limit_usa_padrao_100(self):
+        self.inserir_servidores_numerados(150)
+        payload = self.buscar(similar="servidor").get_json()
+        self.assertEqual(len(payload["resultados"]), 100)
+
+    def test_similar_respeita_o_limit_informado(self):
+        self.inserir_servidores_numerados(150)
+        payload = self.buscar(similar="servidor", limit=10).get_json()
+        self.assertEqual(len(payload["resultados"]), 10)
+
+    def test_similar_limit_acima_do_teto_configurado_e_truncado(self):
+        self.inserir_servidores_numerados(150)
+        with patch.dict(os.environ, {"SIMILAR_LIMIT_MAX": "120"}):
+            response = self.buscar(similar="servidor", limit=100000)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.get_json()["resultados"]), 120)
+
+    def test_similar_teto_padrao_e_500(self):
+        self.inserir_servidores_numerados(600)
+        with patch.dict(os.environ):
+            os.environ.pop("SIMILAR_LIMIT_MAX", None)
+            response = self.buscar(similar="servidor", limit=100000)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.get_json()["resultados"]), 500)
+
+    def test_similar_limit_invalido_retorna_400(self):
+        for valor in ("0", "-5", "abc"):
+            with self.subTest(limit=valor):
+                response = self.buscar(similar="silva", limit=valor)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+    def test_similar_com_payload_sql_injection_nao_quebra_aplicacao(self):
+        payloads = ["' OR '1'='1", "'; DROP TABLE servidores; --", "\" OR \"\"=\""]
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                response = self.buscar(similar=payload)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json()["total"], 0)
+
+                conn = sqlite3.connect(self.db_path)
+                try:
+                    count = conn.execute("SELECT COUNT(*) FROM servidores").fetchone()[0]
+                    self.assertEqual(count, len(self.BASE))
+                finally:
+                    conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()
