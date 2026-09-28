@@ -33,41 +33,6 @@ def build_db_connection():
     )
 
 
-def normalize_nome_param(nome):
-    if nome is None or nome.strip() == "":
-        raise ValueError("nome é obrigatório")
-    return nome.strip()
-
-
-def fetch_servidores_by_name(nome):
-    search_name = normalize_nome_param(nome)
-    driver = get_database_driver()
-    placeholder = "?" if driver == "sqlite" else "%s"
-    sql = (
-        "SELECT nome, cargo, uf, orgao "
-        "FROM servidores "
-        f"WHERE LOWER(nome) = LOWER({placeholder}) "
-        "ORDER BY nome ASC"
-    )
-
-    conn = build_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(sql, (search_name,))
-        rows = cursor.fetchall()
-        return [
-            {
-                "nome": row[0],
-                "cargo": row[1],
-                "uf": row[2],
-                "orgao": row[3],
-            }
-            for row in rows
-        ]
-    finally:
-        conn.close()
-
-
 def normalize_text(value):
     if value is None:
         return ""
@@ -111,19 +76,45 @@ def validar_uf_formato(uf):
     return uf.upper() in UFS_VALIDAS
 
 
-def fetch_servidores_by_column(coluna, valor_real, pagina, limit):
-    if coluna not in ("cargo", "uf"):
-        raise ValueError("coluna inválida")
-    driver = get_database_driver()
-    placeholder = "?" if driver == "sqlite" else "%s"
+# Condição SQL de cada filtro. Só campos listados aqui entram na query
+# (whitelist); o valor do usuário nunca é concatenado, só vai por placeholder.
+# Para criar um filtro novo basta adicionar uma linha neste dicionário.
+FILTROS_SQL = {
+    "nome": "LOWER(nome) = LOWER({p})",
+    "cargo": "cargo = {p}",
+    "uf": "UPPER(uf) = UPPER({p})",
+    "orgao": "LOWER(orgao) LIKE LOWER({p}) ESCAPE '\\'",
+}
+
+
+def escape_like(valor):
+    """Escapa %, _ e \\ para o usuário não injetar curingas no LIKE."""
+    return valor.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def build_where(filtros, placeholder):
+    """Monta o WHERE com AND entre todos os filtros recebidos."""
+    condicoes = []
+    params = []
+    for campo, valor in filtros.items():
+        condicoes.append(FILTROS_SQL[campo].format(p=placeholder))
+        if campo == "orgao":
+            params.append(f"%{escape_like(valor)}%")
+        else:
+            params.append(valor)
+    return " AND ".join(condicoes), params
+
+
+def fetch_servidores(filtros, pagina, limit):
+    placeholder = "?" if get_database_driver() == "sqlite" else "%s"
+    where, params = build_where(filtros, placeholder)
     offset = (pagina - 1) * limit
 
-    condicao = f"UPPER({coluna}) = UPPER({placeholder})" if coluna == "uf" else f"{coluna} = {placeholder}"
-    sql_count = f"SELECT COUNT(*) FROM servidores WHERE {condicao}"
+    sql_count = f"SELECT COUNT(*) FROM servidores WHERE {where}"
     sql = (
         f"SELECT nome, cargo, uf, orgao "
         f"FROM servidores "
-        f"WHERE {condicao} "
+        f"WHERE {where} "
         f"ORDER BY nome ASC "
         f"LIMIT {placeholder} OFFSET {placeholder}"
     )
@@ -131,10 +122,10 @@ def fetch_servidores_by_column(coluna, valor_real, pagina, limit):
     conn = build_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(sql_count, (valor_real,))
+        cursor.execute(sql_count, tuple(params))
         total = cursor.fetchone()[0]
 
-        cursor.execute(sql, (valor_real, limit, offset))
+        cursor.execute(sql, tuple(params) + (limit, offset))
         rows = cursor.fetchall()
         resultados = [
             {"nome": row[0], "cargo": row[1], "uf": row[2], "orgao": row[3]}
@@ -152,9 +143,6 @@ def health():
 
 @app.route("/api/servidores")
 def buscar_servidores():
-    nome = request.args.get("nome")
-    cargo = request.args.get("cargo")
-    uf = request.args.get("uf")
     pagina = request.args.get("pagina", default=1, type=int)
     limit = request.args.get("limit", default=20, type=int)
 
@@ -163,63 +151,44 @@ def buscar_servidores():
     if limit is None or limit < 1:
         return {"erro": "parametro_invalido", "mensagem": "limit deve ser maior que zero"}, 400
 
-    # Busca por nome (correspondência exata, identificador único)
-    if nome is not None and nome.strip() != "":
-        try:
-            resultados = fetch_servidores_by_name(nome)
-        except ValueError as exc:
-            return {"erro": "parametro_invalido", "mensagem": str(exc)}, 400
-        except (sqlite3.Error, psycopg2.Error):
-            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+    nome = request.args.get("nome", "").strip()
+    cargo = request.args.get("cargo", "").strip()
+    uf = request.args.get("uf", "").strip().upper()
+    orgao = request.args.get("orgao", "").strip()
 
-        if not resultados:
+    if not (nome or cargo or uf or orgao):
+        return {"erro": "parametro_invalido", "mensagem": "informe ao menos um parâmetro de busca (nome, cargo, uf ou orgao)"}, 400
+
+    if uf and not validar_uf_formato(uf):
+        return {"erro": "parametro_invalido", "mensagem": "UF deve ser uma sigla válida de 2 letras"}, 400
+
+    filtros = {}
+    try:
+        if cargo:
+            cargo_real = resolve_valor_real(cargo, "cargo")
+            if cargo_real is None:
+                return {"erro": "parametro_invalido", "mensagem": "Cargo não corresponde a nenhum registro cadastrado"}, 400
+            filtros["cargo"] = cargo_real
+        if nome:
+            filtros["nome"] = nome
+        if uf:
+            filtros["uf"] = uf
+        if orgao:
+            filtros["orgao"] = orgao
+
+        total, resultados = fetch_servidores(filtros, pagina, limit)
+    except (sqlite3.Error, psycopg2.Error):
+        return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+
+    # Quando há nome na busca, valem as regras de nome: sem resultado (ou
+    # página inexistente) é 404 e um único registro volta como objeto.
+    if "nome" in filtros:
+        if total == 0 or not resultados:
             return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
-
-        if len(resultados) == 1:
+        if total == 1:
             return resultados[0], 200
 
-        total = len(resultados)
-        start = (pagina - 1) * limit
-        end = start + limit
-        pagina_resultados = resultados[start:end]
-
-        if start >= total:
-            return {"erro": "nao_encontrado", "mensagem": "Nenhum servidor encontrado para os critérios informados"}, 404
-
-        return {"total": total, "pagina": pagina, "resultados": pagina_resultados}, 200
-
-    # Busca por UF (categoria, validada contra lista fixa de siglas, case-insensitive)
-    if uf is not None and uf.strip() != "":
-        uf_limpo = uf.strip().upper()
-        if not validar_uf_formato(uf_limpo):
-            return {"erro": "parametro_invalido", "mensagem": "UF deve ser uma sigla válida de 2 letras"}, 400
-
-        try:
-            total, resultados = fetch_servidores_by_column("uf", uf_limpo, pagina, limit)
-        except (sqlite3.Error, psycopg2.Error):
-            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
-
-        return {"total": total, "pagina": pagina, "resultados": resultados}, 200
-
-    # Busca por cargo (categoria, validado contra cargos existentes, case/acento-insensitive)
-    if cargo is not None and cargo.strip() != "":
-        cargo_limpo = cargo.strip()
-        try:
-            cargo_real = resolve_valor_real(cargo_limpo, "cargo")
-        except (sqlite3.Error, psycopg2.Error):
-            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
-
-        if cargo_real is None:
-            return {"erro": "parametro_invalido", "mensagem": "Cargo não corresponde a nenhum registro cadastrado"}, 400
-
-        try:
-            total, resultados = fetch_servidores_by_column("cargo", cargo_real, pagina, limit)
-        except (sqlite3.Error, psycopg2.Error):
-            return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
-
-        return {"total": total, "pagina": pagina, "resultados": resultados}, 200
-
-    return {"erro": "parametro_invalido", "mensagem": "informe ao menos um parâmetro de busca (nome, cargo ou uf)"}, 400
+    return {"total": total, "pagina": pagina, "resultados": resultados}, 200
 
 
 if __name__ == "__main__":
