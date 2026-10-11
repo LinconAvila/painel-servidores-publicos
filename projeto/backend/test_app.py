@@ -82,7 +82,9 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
         self.assertIsInstance(payload["resultados"], list)
 
     def test_query_uses_parameterized_sql(self):
-        captured = {}
+        # A busca agora executa duas queries (COUNT e SELECT paginado):
+        # registramos todas e conferimos que nenhuma recebe o valor no texto.
+        captured = []
         real_connect = sqlite3.connect
 
         class SpyCursor:
@@ -90,8 +92,7 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
                 self._real_cursor = real_cursor
 
             def execute(self, sql, params=None):
-                captured["sql"] = sql
-                captured["params"] = params
+                captured.append((sql, params))
                 if params is not None:
                     return self._real_cursor.execute(sql, params)
                 return self._real_cursor.execute(sql)
@@ -113,12 +114,18 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
             return SpyConnection(real_connect(*args, **kwargs))
 
         with patch.object(sqlite3, "connect", spy_connect):
-            self.client.get("/api/servidores?nome=João da Silva")
+            self.client.get(
+                "/api/servidores",
+                query_string={"nome": "João da Silva", "orgao": "Fazenda"},
+            )
 
-        self.assertIn("nome", captured["sql"].lower())
-        self.assertIn("?", captured["sql"])
-        self.assertNotIn("João da Silva", captured["sql"])
-        self.assertEqual(captured["params"], ("João da Silva",))
+        self.assertGreaterEqual(len(captured), 2)
+        for sql, params in captured:
+            self.assertIn("?", sql)
+            self.assertNotIn("João da Silva", sql)
+            self.assertNotIn("Fazenda", sql)
+            self.assertIn("João da Silva", params)
+            self.assertIn("%Fazenda%", params)
 
     def test_payload_sql_injection_nao_quebra_aplicacao(self):
         payloads = [
@@ -210,6 +217,140 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["total"], 3)
+        self.assertEqual(len(payload["resultados"]), 1)
+
+    # ---- Órgão (correspondência parcial) ----
+
+    def test_orgao_correspondencia_parcial_e_case_insensitive(self):
+        response = self.client.get("/api/servidores?orgao=fazenda")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 2)
+        nomes = {r["nome"] for r in payload["resultados"]}
+        self.assertEqual(nomes, {"João da Silva", "Carlos Pereira"})
+
+        response = self.client.get("/api/servidores?orgao=Ministério")
+        self.assertEqual(response.get_json()["total"], 3)
+
+    def test_orgao_sem_resultado_retorna_200_vazio(self):
+        response = self.client.get("/api/servidores?orgao=Inexistente")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["resultados"], [])
+
+    def test_orgao_com_multiplos_resultados_retorna_paginacao(self):
+        response = self.client.get("/api/servidores?orgao=Ministério&pagina=2&limit=2")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(payload["pagina"], 2)
+        self.assertEqual(len(payload["resultados"]), 1)
+
+    def test_orgao_nao_trata_curingas_do_usuario_como_curinga(self):
+        # Sem escape, "%" casaria com todos os 7 registros.
+        for curinga in ("%", "_", "\\"):
+            with self.subTest(curinga=curinga):
+                response = self.client.get(
+                    "/api/servidores", query_string={"orgao": curinga}
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json()["total"], 0)
+
+    def test_orgao_com_payload_sql_injection_nao_quebra_aplicacao(self):
+        response = self.client.get(
+            "/api/servidores", query_string={"orgao": "'; DROP TABLE servidores; --"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["total"], 0)
+
+        conn = sqlite3.connect(self.db_path)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM servidores").fetchone()[0]
+            self.assertEqual(count, 7)
+        finally:
+            conn.close()
+
+    # ---- Combinação de filtros (interseção / AND) ----
+
+    def test_combinacao_de_2_filtros_e_intersecao(self):
+        # Analista (3 registros) e SP (3 registros): só 2 estão nos dois.
+        response = self.client.get("/api/servidores?cargo=Analista&uf=SP")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 2)
+        nomes = {r["nome"] for r in payload["resultados"]}
+        self.assertEqual(nomes, {"João da Silva", "Ana Souza"})
+
+    def test_combinacao_de_2_filtros_orgao_e_uf(self):
+        response = self.client.get("/api/servidores?orgao=Ministério&uf=RS")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 2)
+        nomes = {r["nome"] for r in payload["resultados"]}
+        self.assertEqual(nomes, {"Miguel Casarin", "Carlos Pereira"})
+
+    def test_combinacao_de_3_filtros_e_intersecao(self):
+        response = self.client.get(
+            "/api/servidores?cargo=Analista&uf=SP&orgao=Fazenda"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["resultados"][0]["nome"], "João da Silva")
+
+    def test_combinacao_dos_4_filtros_com_resultado_unico_retorna_objeto(self):
+        response = self.client.get(
+            "/api/servidores",
+            query_string={
+                "nome": "João da Silva",
+                "cargo": "Analista",
+                "uf": "SP",
+                "orgao": "Fazenda",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["nome"], "João da Silva")
+        self.assertNotIn("resultados", payload)
+
+    def test_combinacao_dos_4_filtros_sem_intersecao_retorna_404(self):
+        response = self.client.get(
+            "/api/servidores",
+            query_string={
+                "nome": "Miguel Casarin",
+                "cargo": "Analista",
+                "uf": "SP",
+                "orgao": "Fazenda",
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["erro"], "nao_encontrado")
+
+    def test_nome_combinado_com_uf_restringe_homonimos(self):
+        # Sozinho, "Miguel Casarin" tem 3 registros; com uf=SP sobra 1.
+        response = self.client.get("/api/servidores?nome=Miguel+Casarin&uf=SP")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["cargo"], "Servidor")
+
+    def test_validacao_de_uf_e_cargo_vale_dentro_da_combinacao(self):
+        response = self.client.get("/api/servidores?cargo=Analista&uf=XX")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+        response = self.client.get("/api/servidores?cargo=Astronauta&uf=SP")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["erro"], "parametro_invalido")
+
+    def test_combinacao_com_paginacao(self):
+        response = self.client.get(
+            "/api/servidores?cargo=Analista&orgao=Fazenda&pagina=2&limit=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 2)
+        self.assertEqual(payload["pagina"], 2)
         self.assertEqual(len(payload["resultados"]), 1)
 
 
