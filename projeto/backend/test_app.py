@@ -357,7 +357,7 @@ class ServidoresSearchEndpointTests(unittest.TestCase):
 class SimilarEndpointTests(unittest.TestCase):
     """Busca por similaridade (?similar=&limit=), com dataset próprio."""
 
-    BASE = [
+    BASE = (
         ("MARIA DA SILVA", "Analista", "SP", "INSS"),
         ("MARIA SILVA SANTOS", "Analista", "RS", "INSS"),
         ("MARIA APARECIDA DA SILVA", "Tecnica", "SP", "MEC"),
@@ -365,7 +365,7 @@ class SimilarEndpointTests(unittest.TestCase):
         ("SILVANA COSTA", "Analista", "RJ", "MEC"),
         ("CARLOS PEREIRA", "Analista", "SP", "INSS"),
         ("ANA SOUZA", "Analista", "SP", "INSS"),
-    ]
+    )
 
     def setUp(self):
         fd, self.db_path = tempfile.mkstemp(prefix="servidores_similar_", suffix=".db")
