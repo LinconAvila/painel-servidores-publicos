@@ -27,10 +27,12 @@ paths:
             type: string
         - name: similar
           in: query
+          description: "Trecho do nome. Aceita % como curinga. Mínimo de 2 caracteres, sem contar o %. Resposta ordenada por similaridade."
           schema:
             type: string
         - name: limit
           in: query
+          description: "Na busca por similaridade é o máximo de resultados (padrão 100, teto 500). Nas demais buscas é o tamanho da página (padrão 20)."
           schema: 
             type: integer
             default: 20

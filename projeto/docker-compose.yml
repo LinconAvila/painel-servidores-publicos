@@ -34,6 +34,7 @@ services:
       FLASK_ENV: ${FLASK_ENV}
       FLASK_APP: ${FLASK_APP}
       SECRET_KEY: ${SECRET_KEY}
+      SIMILAR_LIMIT_MAX: ${SIMILAR_LIMIT_MAX:-500}
     ports:
       - "5000:8000"
     depends_on:
