@@ -81,6 +81,72 @@ def validar_uf_formato(uf):
     return uf.upper() in UFS_VALIDAS
 
 
+# ---- Validação dos parâmetros de entrada ----
+
+# Únicos parâmetros que a API aceita. Qualquer outro é erro do cliente (400):
+# ignorar em silêncio esconderia um erro de integração.
+PARAMETROS_PERMITIDOS = frozenset(
+    {"nome", "cargo", "uf", "orgao", "similar", "limit", "pagina"}
+)
+CAMPOS_TEXTO = ("nome", "cargo", "uf", "orgao", "similar")
+TEXTO_TAMANHO_MAXIMO = 255  # tamanho da maior coluna de texto (servidores.nome)
+INTEIRO_MAXIMO = 2_147_483_647
+
+
+def erro_parametro(mensagem):
+    return {"erro": "parametro_invalido", "mensagem": mensagem}, 400
+
+
+def erro_parametros_desconhecidos():
+    """Mensagem de erro se a requisição trouxe parâmetros fora da lista."""
+    desconhecidos = sorted(set(request.args) - PARAMETROS_PERMITIDOS)
+    if not desconhecidos:
+        return None
+    # ascii() devolve o nome entre aspas e com escapes, sem repassar
+    # caracteres de controle para a resposta.
+    nomes = ", ".join(ascii(nome[:50]) for nome in desconhecidos[:5])
+    aceitos = ", ".join(sorted(PARAMETROS_PERMITIDOS))
+    return f"parâmetro(s) não reconhecido(s): {nomes}. Parâmetros aceitos: {aceitos}"
+
+
+def erro_texto_invalido(campo, valor):
+    """Mensagem de erro se o texto for grande demais ou tiver caractere de
+    controle (inclui NUL, que o PostgreSQL rejeita); None se estiver ok."""
+    if len(valor) > TEXTO_TAMANHO_MAXIMO:
+        return f"{campo} deve ter no máximo {TEXTO_TAMANHO_MAXIMO} caracteres"
+    if any(unicodedata.category(ch) == "Cc" for ch in valor):
+        return f"{campo} contém caracteres de controle, que não são permitidos"
+    return None
+
+
+def ler_inteiro_positivo(campo, padrao):
+    """Lê um inteiro positivo da query string e devolve (valor, mensagem_erro).
+    Parâmetro ausente ou em branco usa o padrão."""
+    bruto = request.args.get(campo, "").strip()
+    if not bruto:
+        return padrao, None
+    if not re.fullmatch(r"[+-]?[0-9]+", bruto):
+        return None, f"{campo} deve ser um número inteiro"
+    try:
+        valor = int(bruto)
+    except ValueError:  # número com milhares de dígitos
+        valor = INTEIRO_MAXIMO + 1
+    if valor < 1:
+        return None, f"{campo} deve ser maior que zero"
+    if valor > INTEIRO_MAXIMO:
+        return None, f"{campo} deve ser menor ou igual a {INTEIRO_MAXIMO}"
+    return valor, None
+
+
+def erro_pagina_inexistente(total, limit):
+    if total == 0:
+        mensagem = "Nenhum servidor encontrado para os critérios informados"
+    else:
+        total_paginas = -(-total // limit)
+        mensagem = f"Página inexistente: o resultado tem apenas {total_paginas} página(s)"
+    return {"erro": "nao_encontrado", "mensagem": mensagem}, 404
+
+
 # ---- Busca por similaridade ----
 
 SIMILAR_LIMIT_PADRAO = 100
@@ -184,6 +250,10 @@ def fetch_servidores(filtros, pagina, limit):
         cursor.execute(sql_count, tuple(params))
         total = cursor.fetchone()[0]
 
+        # Página além do fim: nem precisa buscar (e evita um OFFSET gigante).
+        if offset > 0 and offset >= total:
+            return total, []
+
         cursor.execute(sql, tuple(params) + (limit, offset))
         rows = cursor.fetchall()
         resultados = [
@@ -228,15 +298,24 @@ def health():
 
 @app.route("/api/servidores")
 def buscar_servidores():
-    pagina = request.args.get("pagina", default=1, type=int)
-    if pagina is None or pagina < 1:
-        return {"erro": "parametro_invalido", "mensagem": "pagina deve ser maior que zero"}, 400
+    mensagem = erro_parametros_desconhecidos()
+    if mensagem:
+        return erro_parametro(mensagem)
+
+    for campo in CAMPOS_TEXTO:
+        mensagem = erro_texto_invalido(campo, request.args.get(campo, ""))
+        if mensagem:
+            return erro_parametro(mensagem)
+
+    pagina, mensagem = ler_inteiro_positivo("pagina", 1)
+    if mensagem:
+        return erro_parametro(mensagem)
 
     similar = request.args.get("similar")
     if similar is None:
-        limit = request.args.get("limit", default=20, type=int)
-        if limit is None or limit < 1:
-            return {"erro": "parametro_invalido", "mensagem": "limit deve ser maior que zero"}, 400
+        limit, mensagem = ler_inteiro_positivo("limit", 20)
+        if mensagem:
+            return erro_parametro(mensagem)
     else:
         # Na busca por similaridade o limit é o máximo de resultados devolvidos:
         # sem limit vale o padrão e acima do teto é truncado (não é erro).
@@ -291,6 +370,10 @@ def buscar_servidores():
     if similar is not None:
         # Vem tudo numa resposta só (até o limit): total = quantos foram devolvidos.
         return {"total": len(resultados), "pagina": 1, "resultados": resultados}, 200
+
+    # Página além do total de páginas: 404 (página 1 vazia segue sendo 200).
+    if pagina > 1 and (pagina - 1) * limit >= total:
+        return erro_pagina_inexistente(total, limit)
 
     # Quando há nome na busca, valem as regras de nome: sem resultado (ou
     # página inexistente) é 404 e um único registro volta como objeto.
