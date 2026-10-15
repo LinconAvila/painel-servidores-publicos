@@ -521,3 +521,26 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Busca por similaridade + campo de limite */
+.similaridade-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.limite-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.limite-label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.limite-input {
+  width: 6rem;
+}
