@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Header } from './components/Header';
 import { SearchForm } from './components/SearchForm';
 import { ResultsArea } from './components/ResultsArea';
@@ -36,6 +36,9 @@ function App() {
   const [similaridade, setSimilaridade] = useState(false);
   const [limite, setLimite] = useState(String(LIMITE_SIMILARIDADE_PADRAO));
 
+  // Filtros ativos da última busca submetida (para paginação consistente)
+  const [filtrosAtivos, setFiltrosAtivos] = useState(null);
+
   // Estados da resposta da API
   const [resultados, setResultados] = useState([]);
   const [totalResultados, setTotalResultados] = useState(0);
@@ -56,8 +59,8 @@ function App() {
 
   // Retorna o limite validado, ou null se o valor informado for inválido.
   // Campo vazio usa o padrão de 100.
-  const obterLimiteSimilaridade = () => {
-    const texto = String(limite).trim();
+  const obterLimiteSimilaridade = (valorLimite) => {
+    const texto = String(valorLimite ?? limite).trim();
     if (texto === '') return LIMITE_SIMILARIDADE_PADRAO;
     const numero = Number(texto);
     if (!Number.isInteger(numero) || numero < 1 || numero > LIMITE_SIMILARIDADE_MAX) {
@@ -66,20 +69,36 @@ function App() {
     return numero;
   };
 
-  const fetchServidores = async (nomeParaBuscar, paginaAtual = 1) => {
-    const termo = (nomeParaBuscar || '').trim();
+  const fetchServidores = async (filtros, paginaAtual = 1) => {
+    const nomeTrim = (filtros.nome || '').trim();
+    const cargoTrim = (filtros.cargo || '').trim();
+    const ufTrim = (filtros.uf || '').trim().toUpperCase();
+    const orgaoTrim = (filtros.orgao || '').trim();
+    const isSimilar = Boolean(filtros.similaridade);
 
-    if (termo === '') {
+    // Validação para busca padrão: ao menos um dos 4 campos deve estar preenchido
+    if (!isSimilar && !nomeTrim && !cargoTrim && !ufTrim && !orgaoTrim) {
       setErroApi('parametro_invalido');
-      setMensagemErro('Informe um nome para realizar a busca.');
+      setMensagemErro('Informe ao menos um parâmetro para realizar a busca (nome, cargo, UF ou órgão).');
       setSubmitted(true);
       limparResultados();
       return;
     }
 
-    let url;
-    if (similaridade) {
-      const limiteValido = obterLimiteSimilaridade();
+    // Validação para busca por similaridade: exige o termo de nome
+    if (isSimilar && !nomeTrim) {
+      setErroApi('parametro_invalido');
+      setMensagemErro('Informe o nome para busca por similaridade.');
+      setSubmitted(true);
+      limparResultados();
+      return;
+    }
+
+    // Montagem dinâmica dos parâmetros de busca
+    const params = new URLSearchParams();
+
+    if (isSimilar) {
+      const limiteValido = obterLimiteSimilaridade(filtros.limite);
       if (limiteValido === null) {
         setErroApi('parametro_invalido');
         setMensagemErro(`O limite de resultados deve ser um número inteiro entre 1 e ${LIMITE_SIMILARIDADE_MAX}.`);
@@ -87,9 +106,18 @@ function App() {
         limparResultados();
         return;
       }
-      url = `/api/servidores?similar=${encodeURIComponent(termo)}&limit=${limiteValido}`;
+      params.append('similar', nomeTrim);
+      if (cargoTrim) params.append('cargo', cargoTrim);
+      if (ufTrim) params.append('uf', ufTrim);
+      if (orgaoTrim) params.append('orgao', orgaoTrim);
+      params.append('limit', String(limiteValido));
     } else {
-      url = `/api/servidores?nome=${encodeURIComponent(termo)}&pagina=${paginaAtual}&limit=${PAGE_SIZE}`;
+      if (nomeTrim) params.append('nome', nomeTrim);
+      if (cargoTrim) params.append('cargo', cargoTrim);
+      if (ufTrim) params.append('uf', ufTrim);
+      if (orgaoTrim) params.append('orgao', orgaoTrim);
+      params.append('pagina', String(paginaAtual));
+      params.append('limit', String(PAGE_SIZE));
     }
 
     setLoading(true);
@@ -98,11 +126,12 @@ function App() {
     setSubmitted(true);
 
     try {
+      const url = `/api/servidores?${params.toString()}`;
       const response = await fetch(url);
       const data = await response.json();
 
       if (response.status === 200) {
-        if (similaridade) {
+        if (isSimilar) {
           // Busca por similaridade: lista completa (até o limite), paginada no front
           const listaCompleta = (data.resultados || []).map((item, idx) =>
             formatarServidor(item, idx + 1)
@@ -111,8 +140,11 @@ function App() {
           setResultados(listaCompleta);
           setTotalResultados(data.total ?? listaCompleta.length);
           setPage(1);
+          if (listaCompleta.length === 0) {
+            setMensagemErro('Nenhum servidor encontrado para os critérios informados.');
+          }
         } else if (data.nome && !data.resultados) {
-          // Resultado único direto para tela de detalhe
+          // Resultado único direto para tela de detalhe (busca por nome que retornou exatamente 1)
           const servidorUnico = formatarServidor(data, 1);
           setBuscaSimilar(false);
           setSelectedServidor(servidorUnico);
@@ -126,8 +158,11 @@ function App() {
           );
           setBuscaSimilar(false);
           setResultados(listaFormatada);
-          setTotalResultados(data.total || listaFormatada.length);
+          setTotalResultados(data.total ?? listaFormatada.length);
           setPage(data.pagina || paginaAtual);
+          if (listaFormatada.length === 0) {
+            setMensagemErro('Nenhum servidor encontrado para os critérios informados.');
+          }
         }
       } else if (response.status === 404) {
         limparResultados();
@@ -155,18 +190,21 @@ function App() {
     }
   };
 
-  // Ao disparar nova busca, reseta SEMPRE para a página 1
+  // Ao disparar nova busca, salva os filtros ativos e reseta SEMPRE para a página 1
   const handleBuscar = () => {
+    const filtros = { nome, cargo, uf, orgao, similaridade, limite };
+    setFiltrosAtivos(filtros);
     setPage(1);
-    fetchServidores(nome, 1);
+    fetchServidores(filtros, 1);
   };
 
-  // Navegação entre páginas
+  // Navegação entre páginas reutiliza os filtros ativos da última busca
   const handlePageChange = (novaPagina) => {
     setPage(novaPagina);
     // Na similaridade a lista já está toda carregada: só troca a fatia exibida
     if (!buscaSimilar) {
-      fetchServidores(nome, novaPagina);
+      const filtros = filtrosAtivos || { nome, cargo, uf, orgao, similaridade, limite };
+      fetchServidores(filtros, novaPagina);
     }
   };
 
@@ -186,6 +224,7 @@ function App() {
     setOrgao('');
     setSimilaridade(false);
     setLimite(String(LIMITE_SIMILARIDADE_PADRAO));
+    setFiltrosAtivos(null);
     setBuscaSimilar(false);
     setSubmitted(false);
     limparResultados();
