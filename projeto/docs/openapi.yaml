@@ -76,9 +76,34 @@ paths:
                   erro: "limite_excedido"
                   mensagem: "Muitas requisições, tente novamente em instantes"
           "504":
-            description: Timeout na busca
+            description: A consulta excedeu o tempo limite do banco de dados
             content:
               application/json:
+                schema:
+                  type: object
+                  properties:
+                    erro:
+                      type: string
+                      example: timeout
+                    mensagem:
+                      type: string
+                      example: A busca demorou muito para responder. Por favor, especifique melhor os filtros.
                 example:
                   erro: "timeout"
-                  mensagem: "A busca excedeu o tempo limite"
+                  mensagem: "A busca demorou muito para responder. Por favor, especifique melhor os filtros."
+          "500":
+            description: Erro interno ao consultar o banco de dados
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    erro:
+                      type: string
+                      example: erro_interno
+                    mensagem:
+                      type: string
+                      example: Erro interno ao consultar o banco
+                example:
+                  erro: "erro_interno"
+                  mensagem: "Erro interno ao consultar o banco"

@@ -5,6 +5,8 @@ import unittest
 from unittest.mock import patch
 
 import app
+import psycopg2
+from psycopg2 import errors as pg_errors
 
 
 class ServidoresSearchEndpointTests(unittest.TestCase):
@@ -530,6 +532,76 @@ class SimilarEndpointTests(unittest.TestCase):
                     self.assertEqual(count, len(self.BASE))
                 finally:
                     conn.close()
+
+
+class TimeoutAndDbErrorTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+
+    def test_get_statement_timeout_ms_default(self):
+        with patch.dict(os.environ):
+            os.environ.pop("DB_STATEMENT_TIMEOUT_MS", None)
+            self.assertEqual(app.get_statement_timeout_ms(), 5000)
+
+    def test_get_statement_timeout_ms_custom(self):
+        with patch.dict(os.environ, {"DB_STATEMENT_TIMEOUT_MS": "2500"}):
+            self.assertEqual(app.get_statement_timeout_ms(), 2500)
+
+    def test_get_statement_timeout_ms_invalid(self):
+        with patch.dict(os.environ, {"DB_STATEMENT_TIMEOUT_MS": "invalid"}):
+            self.assertEqual(app.get_statement_timeout_ms(), 5000)
+
+    def test_get_statement_timeout_ms_minimum(self):
+        with patch.dict(os.environ, {"DB_STATEMENT_TIMEOUT_MS": "-10"}):
+            self.assertEqual(app.get_statement_timeout_ms(), 1)
+
+    def test_build_db_connection_passes_statement_timeout_options(self):
+        env = {
+            "DATABASE_URL": "postgresql://painel_user:troque_esta_senha@localhost:5432/servidores_federais",
+            "DB_STATEMENT_TIMEOUT_MS": "3000",
+        }
+        with patch.dict(os.environ, env), patch("app.psycopg2.connect") as mock_connect:
+            app.build_db_connection()
+            mock_connect.assert_called_once()
+            _, kwargs = mock_connect.call_args
+            self.assertEqual(kwargs.get("options"), "-c statement_timeout=3000")
+
+    def test_busca_retorna_504_em_query_canceled(self):
+        with patch("app.fetch_servidores", side_effect=pg_errors.QueryCanceled()):
+            response = self.client.get("/api/servidores?uf=SP")
+        self.assertEqual(response.status_code, 504)
+        payload = response.get_json()
+        self.assertEqual(payload["erro"], "timeout")
+        self.assertIn("demorou muito", payload["mensagem"])
+
+    def test_busca_similar_retorna_504_em_query_canceled(self):
+        with patch("app.fetch_servidores_similares", side_effect=pg_errors.QueryCanceled()):
+            response = self.client.get("/api/servidores?similar=silva")
+        self.assertEqual(response.status_code, 504)
+        payload = response.get_json()
+        self.assertEqual(payload["erro"], "timeout")
+
+    def test_busca_resolve_cargo_retorna_504_em_query_canceled(self):
+        with patch("app.fetch_distinct_values", side_effect=pg_errors.QueryCanceled()):
+            response = self.client.get("/api/servidores?cargo=Analista")
+        self.assertEqual(response.status_code, 504)
+        payload = response.get_json()
+        self.assertEqual(payload["erro"], "timeout")
+
+    def test_busca_retorna_500_em_erro_de_banco_psycopg2(self):
+        with patch("app.fetch_servidores", side_effect=psycopg2.OperationalError("Conexão recusada")):
+            response = self.client.get("/api/servidores?uf=SP")
+        self.assertEqual(response.status_code, 500)
+        payload = response.get_json()
+        self.assertEqual(payload["erro"], "erro_interno")
+        self.assertEqual(payload["mensagem"], "Erro interno ao consultar o banco")
+
+    def test_busca_retorna_500_em_erro_de_banco_sqlite3(self):
+        with patch("app.fetch_servidores", side_effect=sqlite3.OperationalError("disk I/O error")):
+            response = self.client.get("/api/servidores?uf=SP")
+        self.assertEqual(response.status_code, 500)
+        payload = response.get_json()
+        self.assertEqual(payload["erro"], "erro_interno")
 
 
 if __name__ == "__main__":

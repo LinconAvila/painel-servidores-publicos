@@ -6,8 +6,19 @@ from urllib.parse import urlparse
 
 import psycopg2
 from flask import Flask, request
+from psycopg2 import errors as pg_errors
 
 app = Flask(__name__)
+
+STATEMENT_TIMEOUT_MS_PADRAO = 5000
+
+
+def get_statement_timeout_ms():
+    """Timeout das queries no PostgreSQL (variável DB_STATEMENT_TIMEOUT_MS)."""
+    try:
+        return max(1, int(os.getenv("DB_STATEMENT_TIMEOUT_MS", STATEMENT_TIMEOUT_MS_PADRAO)))
+    except ValueError:
+        return STATEMENT_TIMEOUT_MS_PADRAO
 
 
 def get_database_url():
@@ -35,6 +46,7 @@ def build_db_connection():
         dbname=parsed.path.lstrip("/") or os.getenv("POSTGRES_DB", "servidores_federais"),
         user=parsed.username or os.getenv("POSTGRES_USER", "painel_user"),
         password=parsed.password or os.getenv("POSTGRES_PASSWORD", "troque_esta_senha"),
+        options=f"-c statement_timeout={get_statement_timeout_ms()}",
     )
 
 
@@ -145,6 +157,16 @@ def erro_pagina_inexistente(total, limit):
         total_paginas = -(-total // limit)
         mensagem = f"Página inexistente: o resultado tem apenas {total_paginas} página(s)"
     return {"erro": "nao_encontrado", "mensagem": mensagem}, 404
+
+
+TIMEOUT_RESPOSTA = {
+    "erro": "timeout",
+    "mensagem": "A busca demorou muito para responder. Por favor, especifique melhor os filtros.",
+}
+ERRO_INTERNO_BANCO = {
+    "erro": "erro_interno",
+    "mensagem": "Erro interno ao consultar o banco",
+}
 
 
 # ---- Busca por similaridade ----
@@ -364,8 +386,11 @@ def buscar_servidores():
             resultados = fetch_servidores_similares(filtros, termo, limit)
         else:
             total, resultados = fetch_servidores(filtros, pagina, limit)
+    except pg_errors.QueryCanceled:
+        return TIMEOUT_RESPOSTA, 504
     except (sqlite3.Error, psycopg2.Error):
-        return {"erro": "timeout", "mensagem": "A busca excedeu o tempo limite"}, 504
+        app.logger.exception("Erro de banco na busca de servidores")
+        return ERRO_INTERNO_BANCO, 500
 
     if similar is not None:
         # Vem tudo numa resposta só (até o limit): total = quantos foram devolvidos.
