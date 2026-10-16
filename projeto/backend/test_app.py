@@ -9,6 +9,7 @@ from psycopg2 import errors as pg_errors
 
 import app
 
+
 class ServidoresSearchEndpointTests(unittest.TestCase):
     def setUp(self):
         fd, db_path = tempfile.mkstemp(prefix="servidores_", suffix=".db")
