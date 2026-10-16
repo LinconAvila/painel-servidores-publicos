@@ -4,10 +4,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import app
 import psycopg2
 from psycopg2 import errors as pg_errors
 
+import app
 
 class ServidoresSearchEndpointTests(unittest.TestCase):
     def setUp(self):
