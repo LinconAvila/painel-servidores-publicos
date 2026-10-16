@@ -12,6 +12,8 @@ export function SearchForm({
   uf, setUf,
   orgao, setOrgao,
   similaridade, setSimilaridade,
+  limite, setLimite,
+  limiteMaximo,
   onBuscar, onClear,
   erroApi, mensagemErro
 }) {
@@ -50,7 +52,7 @@ export function SearchForm({
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <div className="form-grid">
           <div className="field-group">
             <label className="field-label" htmlFor="nome">Nome</label>
@@ -106,15 +108,35 @@ export function SearchForm({
         </div>
 
         <div className="form-actions">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={similaridade}
-              onChange={(e) => setSimilaridade(e.target.checked)}
-              className="checkbox-input"
-            />
-            <span className="checkbox-text">Busca por similaridade</span>
-          </label>
+          <div className="similaridade-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={similaridade}
+                onChange={(e) => setSimilaridade(e.target.checked)}
+                className="checkbox-input"
+              />
+              <span className="checkbox-text">Busca por similaridade</span>
+            </label>
+
+            {similaridade && (
+              <div className="limite-group">
+                <label className="field-label limite-label" htmlFor="limite">
+                  Limite de resultados
+                </label>
+                <input
+                  id="limite"
+                  type="number"
+                  min="1"
+                  max={limiteMaximo}
+                  step="1"
+                  value={limite}
+                  onChange={(e) => setLimite(e.target.value)}
+                  className="field-input limite-input"
+                />
+              </div>
+            )}
+          </div>
 
           <div className="button-group">
             <button type="button" onClick={onClear} className="btn-clear">
