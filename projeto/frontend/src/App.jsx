@@ -19,8 +19,8 @@ function formatarServidor(item, id) {
     cargo: item.cargo,
     uf: item.uf,
     orgao: item.orgao,
-    status: 'Ativo',
-    matricula: '****' + Math.floor(1000 + Math.random() * 9000),
+    status: item.status || 'Ativo',
+    matricula: item.matricula || null,
   };
 }
 
@@ -167,14 +167,22 @@ function App() {
       } else if (response.status === 404) {
         limparResultados();
         setErroApi(null);
-        setMensagemErro(data.mensagem || 'Nenhum servidor encontrado para os critérios informados');
+        setMensagemErro(data.mensagem || 'Nenhum servidor encontrado para os critérios informados.');
       } else if (response.status === 400) {
         setErroApi('parametro_invalido');
         setMensagemErro(data.mensagem || 'Parâmetro de busca inválido.');
         limparResultados();
+      } else if (response.status === 429) {
+        setErroApi('limite_excedido');
+        setMensagemErro(data.mensagem || 'Muitas requisições. Aguarde um momento antes de tentar novamente.');
+        limparResultados();
       } else if (response.status === 504) {
         setErroApi('timeout');
         setMensagemErro(data.mensagem || 'A busca demorou demais.');
+        limparResultados();
+      } else if (response.status === 500) {
+        setErroApi('erro_interno');
+        setMensagemErro(data.mensagem || 'Ocorreu um erro interno no servidor.');
         limparResultados();
       } else {
         setErroApi('generico');
