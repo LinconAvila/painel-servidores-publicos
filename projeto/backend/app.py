@@ -1,15 +1,42 @@
+import math
 import os
 import re
 import sqlite3
+import time
 import unicodedata
 from urllib.parse import urlparse
 
 import psycopg2
 from flask import Flask, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from psycopg2 import errors as pg_errors
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 
+# Atrás do Nginx, o IP que chega no Flask é sempre o do proxy. O ProxyFix lê o
+# X-Forwarded-For que o Nginx acrescenta (o último valor, que o cliente não
+# controla) para o rate limit enxergar o IP real de cada usuário.
+# TRUSTED_PROXIES = quantos proxies existem na frente do backend (0 desliga).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=int(os.getenv("TRUSTED_PROXIES", "1")))
+
+RATE_LIMIT_PADRAO = "60 per minute"
+
+
+def get_rate_limit():
+    """Limite de requisições por IP na busca (variável RATE_LIMIT)."""
+    return os.getenv("RATE_LIMIT") or RATE_LIMIT_PADRAO
+
+
+# Contadores em memória: cada worker do Gunicorn mantém o seu próprio, então o
+# limite efetivo por IP pode chegar a (limite x número de workers).
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    storage_uri="memory://",
+    default_limits=[],
+)
 STATEMENT_TIMEOUT_MS_PADRAO = 5000
 
 
@@ -318,7 +345,26 @@ def health():
     return {"status": "ok"}, 200
 
 
+@app.errorhandler(429)
+def limite_excedido(_erro):
+    """429 no formato do contrato, com o tempo de espera até a próxima tentativa."""
+    espera = 1
+    limite_atingido = getattr(request, "view_rate_limit", None)
+    if limite_atingido is not None:
+        limite, chave = limite_atingido[0], limite_atingido[1:]
+        reset_em, _ = limiter.limiter.get_window_stats(limite, *chave)
+        espera = max(1, math.ceil(reset_em - time.time()))
+
+    corpo = {
+        "erro": "limite_excedido",
+        "mensagem": f"Muitas requisições, tente novamente em {espera} segundos",
+        "tentar_novamente_em": espera,
+    }
+    return corpo, 429, {"Retry-After": str(espera)}
+
+
 @app.route("/api/servidores")
+@limiter.limit(get_rate_limit)
 def buscar_servidores():
     mensagem = erro_parametros_desconhecidos()
     if mensagem:

@@ -14,6 +14,7 @@ import unittest
 
 import app
 
+app.limiter.enabled = False
 
 class ValidacaoParametrosTests(unittest.TestCase):
     TOTAL = 25  # 25 servidores de SP, "Analista", no INSS
