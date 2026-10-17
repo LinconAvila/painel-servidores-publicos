@@ -37,7 +37,6 @@ limiter = Limiter(
     storage_uri="memory://",
     default_limits=[],
 )
-
 STATEMENT_TIMEOUT_MS_PADRAO = 5000
 
 
