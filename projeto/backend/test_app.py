@@ -9,6 +9,8 @@ from psycopg2 import errors as pg_errors
 
 import app
 
+app.limiter.enabled = False
+
 
 class ServidoresSearchEndpointTests(unittest.TestCase):
     def setUp(self):
