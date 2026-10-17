@@ -35,6 +35,7 @@ services:
       FLASK_APP: ${FLASK_APP}
       SECRET_KEY: ${SECRET_KEY}
       SIMILAR_LIMIT_MAX: ${SIMILAR_LIMIT_MAX:-500}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-5000}
     ports:
       - "5000:8000"
     depends_on:
