@@ -73,17 +73,21 @@ export function SearchForm({
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="form-grid">
-          <div className="field-group">
-            <label className="field-label" htmlFor="nome">Nome</label>
-            <input
-              id="nome"
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="João da Silva"
-              className="field-input"
-            />
-          </div>
+            <div className="field-group">
+              <label className="field-label" htmlFor="nome">Nome</label>
+              <input
+                id="nome"
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder={
+                  similaridade
+                    ? "Trecho do nome (ex: Maria)"
+                    : "Nome completo (ou use similaridade)"
+                }
+                className="field-input"
+              />
+            </div>
 
           <div className="field-group">
             <label className="field-label" htmlFor="cargo">Cargo</label>
