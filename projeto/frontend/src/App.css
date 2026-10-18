@@ -5,6 +5,7 @@
   background-color: var(--color-ground);
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 /* Header Sticky com badge SIAPE */
@@ -40,6 +41,9 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-charcoal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-badge {
@@ -51,6 +55,7 @@
   border-radius: 0.25rem;
   background-color: #F3F4F6;
   color: var(--color-secondary);
+  flex-shrink: 0;
 }
 
 /* Layout Principal */
@@ -95,6 +100,7 @@
 .field-group {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .field-label {
@@ -136,6 +142,28 @@
   gap: 0.75rem;
 }
 
+.similaridade-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.limite-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.limite-label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.limite-input {
+  width: 5.5rem;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -172,6 +200,7 @@
   color: var(--color-secondary);
   cursor: pointer;
   transition: border-color 0.15s ease;
+  white-space: nowrap;
 }
 
 .btn-clear:hover {
@@ -181,6 +210,7 @@
 .btn-submit {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
@@ -191,10 +221,45 @@
   color: #FFFFFF;
   cursor: pointer;
   transition: background-color 0.15s ease;
+  white-space: nowrap;
 }
 
 .btn-submit:hover {
   background-color: var(--color-petrol-dark);
+}
+
+/* Responsividade específica do formulário em telas pequenas */
+@media (max-width: 640px) {
+  .main-content {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .filter-card {
+    padding: 1rem;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .similaridade-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .button-group {
+    width: 100%;
+  }
+
+  .btn-clear,
+  .btn-submit {
+    flex: 1;
+    justify-content: center;
+    padding: 0.625rem 0.75rem;
+  }
 }
 
 /* Badges */
@@ -205,11 +270,14 @@
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Lista de Resultados */
 .results-container {
   margin-top: 1.5rem;
+  width: 100%;
 }
 
 .results-meta {
@@ -218,11 +286,14 @@
   align-items: center;
   margin-bottom: 8px;
   padding: 0 4px;
+  gap: 8px;
 }
 
-.results-count, .results-pages-info {
+.results-count,
+.results-pages-info {
   font-size: 0.75rem;
   color: #9CA3AF;
+  white-space: nowrap;
 }
 
 .results-card {
@@ -236,10 +307,11 @@
 .result-item {
   width: 100%;
   text-align: left;
-  padding: 14px 20px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -254,22 +326,31 @@
   background-color: #F7FDFB;
 }
 
+.result-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .result-name {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-charcoal);
+  word-break: break-word;
 }
 
 .result-sub {
   font-size: 0.75rem;
   color: #9CA3AF;
   margin-top: 2px;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .result-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .chevron {
@@ -283,7 +364,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 16px;
+  padding: 36px 16px;
 }
 
 .empty-icon {
@@ -303,6 +384,7 @@
   color: var(--color-secondary);
   max-width: 320px;
   margin-bottom: 16px;
+  word-break: break-word;
 }
 
 .btn-clear-empty {
@@ -321,13 +403,16 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-top: 16px;
+  padding: 4px 0;
 }
 
 .pagination-btn {
-  width: 32px;
+  min-width: 32px;
   height: 32px;
+  padding: 0 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -356,6 +441,7 @@
   max-width: 42rem;
   margin: 0 auto;
   padding: 2rem 1rem;
+  width: 100%;
 }
 
 .btn-back {
@@ -365,6 +451,9 @@
   font-size: 0.875rem;
   cursor: pointer;
   margin-bottom: 1.5rem;
+  padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
 }
 
 .btn-back:hover {
@@ -402,6 +491,7 @@
 
 .detail-title-group {
   flex: 1;
+  min-width: 0;
 }
 
 .detail-name-row {
@@ -416,12 +506,14 @@
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--color-charcoal);
+  word-break: break-word;
 }
 
 .detail-cargo {
   font-size: 0.875rem;
   color: var(--color-secondary);
   margin-top: 2px;
+  word-break: break-word;
 }
 
 .detail-divider {
@@ -440,6 +532,7 @@
   align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
+  gap: 12px;
 }
 
 .detail-field-row:last-child {
@@ -449,12 +542,52 @@
 .detail-field-label {
   font-size: 0.875rem;
   color: var(--color-secondary);
+  flex-shrink: 0;
 }
 
 .detail-field-value {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-charcoal);
+  text-align: right;
+  word-break: break-word;
+}
+
+/* Responsividade específica da tela de Detalhes no mobile */
+@media (max-width: 640px) {
+  .detail-container {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .detail-header {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .detail-name-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .detail-divider {
+    margin: 0 16px;
+  }
+
+  .detail-fields {
+    padding: 12px 16px 16px;
+  }
+
+  .detail-field-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 0;
+    gap: 2px;
+  }
+
+  .detail-field-value {
+    text-align: left;
+  }
 }
 
 /* Alertas de Erro e Timeout */
@@ -466,6 +599,7 @@
   border-radius: 8px;
   margin-bottom: 16px;
   border: 1px solid transparent;
+  word-break: break-word;
 }
 
 .alert-banner.warning {
@@ -520,27 +654,4 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
-}
-
-/* Busca por similaridade + campo de limite */
-.similaridade-group {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-}
-
-.limite-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.limite-label {
-  margin-bottom: 0;
-  white-space: nowrap;
-}
-
-.limite-input {
-  width: 6rem;
 }
