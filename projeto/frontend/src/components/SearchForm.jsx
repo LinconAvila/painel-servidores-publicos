@@ -39,14 +39,33 @@ export function SearchForm({
         </div>
       )}
 
-      {(erroApi === 'parametro_invalido' || erroApi === 'conexao') && (
+      {erroApi === 'limite_excedido' && (
+        <div className="alert-banner warning">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8.5" stroke="#92701A" strokeWidth="1.5" />
+            <path d="M10 6v4l2.5 2" stroke="#92701A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div>
+            <p className="alert-title">Limite de requisições excedido</p>
+            <p className="alert-desc">{mensagemErro || 'Aguarde um momento antes de realizar uma nova busca.'}</p>
+          </div>
+        </div>
+      )}
+
+      {(erroApi === 'parametro_invalido' || erroApi === 'conexao' || erroApi === 'erro_interno' || erroApi === 'generico') && (
         <div className="alert-banner error">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <circle cx="10" cy="10" r="8.5" stroke="#DC2626" strokeWidth="1.5" />
             <path d="M10 6v5M10 13.5v.5" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <div>
-            <p className="alert-title">{erroApi === 'conexao' ? 'Erro de conexão' : 'Erro de validação'}</p>
+            <p className="alert-title">
+              {erroApi === 'conexao'
+                ? 'Erro de conexão'
+                : erroApi === 'erro_interno' || erroApi === 'generico'
+                ? 'Erro no servidor'
+                : 'Erro de validação'}
+            </p>
             <p className="alert-desc">{mensagemErro}</p>
           </div>
         </div>
@@ -54,17 +73,21 @@ export function SearchForm({
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="form-grid">
-          <div className="field-group">
-            <label className="field-label" htmlFor="nome">Nome</label>
-            <input
-              id="nome"
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="João da Silva"
-              className="field-input"
-            />
-          </div>
+            <div className="field-group">
+              <label className="field-label" htmlFor="nome">Nome</label>
+              <input
+                id="nome"
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder={
+                  similaridade
+                    ? "Trecho do nome (ex: Maria)"
+                    : "Nome completo (ou use similaridade)"
+                }
+                className="field-input"
+              />
+            </div>
 
           <div className="field-group">
             <label className="field-label" htmlFor="cargo">Cargo</label>

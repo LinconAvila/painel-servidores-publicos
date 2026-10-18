@@ -41,12 +41,14 @@ export function DetailView({ servidor, onBack }) {
           )}
           <DetailField
             label="UF"
-            value={isAtivo ? servidor.uf : '— não disponível para aposentados'}
+            value={isAtivo ? (servidor.uf || 'Não informada') : '— não disponível para aposentados'}
           />
           {servidor.carreira && (
             <DetailField label="Carreira" value={servidor.carreira} />
           )}
-          <DetailField label="Matrícula" value={servidor.matricula} />
+          {servidor.matricula && (
+            <DetailField label="Matrícula" value={servidor.matricula} />
+          )}
           {servidor.dataIngresso && (
             <DetailField label="Data de ingresso" value={servidor.dataIngresso} />
           )}

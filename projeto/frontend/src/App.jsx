@@ -13,14 +13,21 @@ const LIMITE_SIMILARIDADE_PADRAO = 100;
 const LIMITE_SIMILARIDADE_MAX = 500;
 
 function formatarServidor(item, id) {
+  const isAposentado = item.status === 'aposentado' || item.status === 'Aposentado' || !item.uf;
+  const status = isAposentado ? 'Aposentado' : 'Ativo';
+
   return {
-    id,
+    id: item.id || id,
     nome: item.nome,
     cargo: item.cargo,
-    uf: item.uf,
+    uf: item.uf || null,
     orgao: item.orgao,
-    status: 'Ativo',
-    matricula: '****' + Math.floor(1000 + Math.random() * 9000),
+    status: status,
+    siglaOrgao: item.sigla_orgao || item.siglaOrgao || null,
+    carreira: item.codigo_carreira || item.carreira || null,
+    matricula: item.matricula || null,
+    dataIngresso: item.data_ingresso || item.dataIngresso || null,
+    tipoAposentadoria: item.tipo_aposentadoria || item.tipoAposentadoria || null,
   };
 }
 
@@ -167,14 +174,22 @@ function App() {
       } else if (response.status === 404) {
         limparResultados();
         setErroApi(null);
-        setMensagemErro(data.mensagem || 'Nenhum servidor encontrado para os critérios informados');
+        setMensagemErro(data.mensagem || 'Nenhum servidor encontrado para os critérios informados.');
       } else if (response.status === 400) {
         setErroApi('parametro_invalido');
         setMensagemErro(data.mensagem || 'Parâmetro de busca inválido.');
         limparResultados();
+      } else if (response.status === 429) {
+        setErroApi('limite_excedido');
+        setMensagemErro(data.mensagem || 'Muitas requisições. Aguarde um momento antes de tentar novamente.');
+        limparResultados();
       } else if (response.status === 504) {
         setErroApi('timeout');
         setMensagemErro(data.mensagem || 'A busca demorou demais.');
+        limparResultados();
+      } else if (response.status === 500) {
+        setErroApi('erro_interno');
+        setMensagemErro(data.mensagem || 'Ocorreu um erro interno no servidor.');
         limparResultados();
       } else {
         setErroApi('generico');
