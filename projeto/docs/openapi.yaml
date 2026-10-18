@@ -68,6 +68,19 @@ paths:
                 example:
                   erro: "nao_encontrado"
                   mensagem: "Nenhum servidor encontrado para os critérios informados"
+          "405":
+            description: Método HTTP não permitido
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    erro:
+                      type: string
+                      example: metodo_nao_permitido
+                    mensagem:
+                      type: string
+                      example: Método não permitido
           "429":
             description: Excesso de requisições simultâneas
             content:

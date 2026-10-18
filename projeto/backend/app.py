@@ -457,5 +457,25 @@ def buscar_servidores():
     return {"total": total, "pagina": pagina, "resultados": resultados}, 200
 
 
+@app.errorhandler(404)
+def recurso_nao_encontrado(_erro):
+    return {"erro": "nao_encontrado", "mensagem": "Recurso não encontrado"}, 404
+
+
+@app.errorhandler(405)
+def metodo_nao_permitido(_erro):
+    return {"erro": "metodo_nao_permitido", "mensagem": "Método não permitido"}, 405
+
+
+@app.errorhandler(500)
+def erro_interno(erro):
+    app.logger.exception("Erro não tratado: %s", erro)
+    return {"erro": "erro_interno", "mensagem": "Erro interno do servidor"}, 500
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(
+        host=os.getenv("FLASK_HOST", "127.0.0.1"),
+        port=int(os.getenv("FLASK_PORT", "5000")),
+        debug=os.getenv("FLASK_DEBUG") == "1",
+    )
