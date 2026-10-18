@@ -607,5 +607,20 @@ class TimeoutAndDbErrorTests(unittest.TestCase):
         self.assertEqual(payload["erro"], "erro_interno")
 
 
+class ErrosPadraoJsonTests(unittest.TestCase):
+    def setUp(self):
+        self.client = app.app.test_client()
+
+    def test_rota_inexistente_retorna_json_404(self):
+        response = self.client.get("/nao-existe")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["erro"], "nao_encontrado")
+
+    def test_metodo_nao_permitido_retorna_json_405(self):
+        response = self.client.post("/api/servidores")
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.get_json()["erro"], "metodo_nao_permitido")
+
+
 if __name__ == "__main__":
     unittest.main()
