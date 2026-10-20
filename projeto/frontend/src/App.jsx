@@ -14,15 +14,17 @@ const LIMITE_SIMILARIDADE_MAX = 500;
 
 function formatarServidor(item, id) {
   const statusStr = (item.status || '').toLowerCase();
-  const isAposentado = statusStr === 'aposentado' || !item.uf;
+
+  const isAposentado = statusStr ? statusStr === 'aposentado' : !item.uf;
   const status = isAposentado ? 'Aposentado' : 'Ativo';
+
 
   const remuneracaoNum =
     typeof item.remuneracao === 'number'
       ? item.remuneracao
       : item.remuneracao
-      ? parseFloat(item.remuneracao)
-      : 0.0;
+        ? parseFloat(item.remuneracao)
+        : 0.0;
 
   return {
     id: item.id || id,

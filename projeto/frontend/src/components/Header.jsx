@@ -23,9 +23,6 @@ export function Header() {
             Painel de Servidores Públicos
           </span>
         </div>
-        <div className="header-badge">
-          <span>SIAPE</span>
-        </div>
       </div>
     </header>
   );
