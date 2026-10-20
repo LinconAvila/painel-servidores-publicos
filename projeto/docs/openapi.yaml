@@ -54,6 +54,12 @@ paths:
                       cargo: "Político"
                       uf: "RS"
                       orgao: "Ministério Rebolar"
+                      remuneracao: 15000.00
+                      status: "ativo"
+                      tipo_aposentadoria: null
+                      data_aposentadoria: null
+                      tipo_ingresso: "Concurso Público"
+                      data_ingresso: "2010-01-01"
           "400":
             description: Parâmetro inválido
             content:
@@ -83,11 +89,25 @@ paths:
                       example: Método não permitido
           "429":
             description: Excesso de requisições simultâneas
+            headers:
+              Retry-After:
+                description: Tempo de espera necessário em segundos até a próxima tentativa.
+                schema:
+                  type: integer
             content:
               application/json:
-                example:
-                  erro: "limite_excedido"
-                  mensagem: "Muitas requisições, tente novamente em instantes"
+                schema:
+                  type: object
+                  properties:
+                    erro:
+                      type: string
+                      example: limite_excedido
+                    mensagem:
+                      type: string
+                      example: Muitas requisições, tente novamente em 60 segundos
+                    tentar_novamente_em:
+                      type: integer
+                      example: 60
           "504":
             description: A consulta excedeu o tempo limite do banco de dados
             content:

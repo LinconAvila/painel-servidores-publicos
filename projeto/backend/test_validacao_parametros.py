@@ -26,10 +26,17 @@ class ValidacaoParametrosTests(unittest.TestCase):
         os.environ["DATABASE_URL"] = f"sqlite:///{self.db_path}"
 
         conn = sqlite3.connect(self.db_path)
-        conn.execute("CREATE TABLE servidores (nome TEXT, cargo TEXT, uf TEXT, orgao TEXT)")
+        # 1. Tabela atualizada com as novas colunas
+        conn.execute(
+            "CREATE TABLE servidores (nome TEXT, cargo TEXT, uf TEXT, orgao TEXT, remuneracao REAL, status TEXT, tipo_aposentadoria TEXT, data_aposentadoria TEXT, tipo_ingresso TEXT, data_ingresso TEXT)"
+        )
+        # 2. INSERT INTO atualizado com 10 interrogacoes e os dados mockados no for
         conn.executemany(
-            "INSERT INTO servidores (nome, cargo, uf, orgao) VALUES (?, ?, ?, ?)",
-            [(f"SERVIDOR {i:02d}", "Analista", "SP", "INSS") for i in range(self.TOTAL)],
+            "INSERT INTO servidores (nome, cargo, uf, orgao, remuneracao, status, tipo_aposentadoria, data_aposentadoria, tipo_ingresso, data_ingresso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (f"SERVIDOR {i:02d}", "Analista", "SP", "INSS", 8500.0, "ativo", None, None, "Concurso", "2010-01-01") 
+                for i in range(self.TOTAL)
+            ],
         )
         conn.commit()
         conn.close()

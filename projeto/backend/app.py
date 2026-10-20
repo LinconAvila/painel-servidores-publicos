@@ -286,7 +286,8 @@ def fetch_servidores(filtros, pagina, limit):
 
     sql_count = f"SELECT COUNT(*) FROM servidores WHERE {where}"
     sql = (
-        f"SELECT nome, cargo, uf, orgao "
+        f"SELECT nome, cargo, uf, orgao, remuneracao, status, "
+        f"tipo_aposentadoria, data_aposentadoria, tipo_ingresso, data_ingresso "
         f"FROM servidores "
         f"WHERE {where} "
         f"ORDER BY nome ASC "
@@ -299,14 +300,24 @@ def fetch_servidores(filtros, pagina, limit):
         cursor.execute(sql_count, tuple(params))
         total = cursor.fetchone()[0]
 
-        # Página além do fim: nem precisa buscar (e evita um OFFSET gigante).
         if offset > 0 and offset >= total:
             return total, []
 
         cursor.execute(sql, tuple(params) + (limit, offset))
         rows = cursor.fetchall()
         resultados = [
-            {"nome": row[0], "cargo": row[1], "uf": row[2], "orgao": row[3]}
+            {
+                "nome": row[0],
+                "cargo": row[1],
+                "uf": row[2],
+                "orgao": row[3],
+                "remuneracao": float(row[4]) if row[4] is not None else 0.0,
+                "status": row[5], # Retorna 'ativo' ou 'aposentado'
+                "tipo_aposentadoria": row[6],
+                "data_aposentadoria": str(row[7]) if row[7] else None,
+                "tipo_ingresso": row[8],
+                "data_ingresso": str(row[9]) if row[9] else None,
+            }
             for row in rows
         ]
         return total, resultados
@@ -315,13 +326,12 @@ def fetch_servidores(filtros, pagina, limit):
 
 
 def fetch_servidores_similares(filtros, termo, limit):
-    """Servidores que casam com os filtros (incluindo o padrão de 'similar'),
-    do nome mais parecido com o termo para o menos parecido."""
     placeholder = "?" if get_database_driver() == "sqlite" else "%s"
     where, params = build_where(filtros, placeholder)
 
     sql = (
-        f"SELECT nome, cargo, uf, orgao "
+        f"SELECT nome, cargo, uf, orgao, remuneracao, status, "
+        f"tipo_aposentadoria, data_aposentadoria, tipo_ingresso, data_ingresso "
         f"FROM servidores "
         f"WHERE {where} "
         f"ORDER BY similarity(nome, {placeholder}) DESC, nome ASC "
@@ -333,7 +343,18 @@ def fetch_servidores_similares(filtros, termo, limit):
         cursor = conn.cursor()
         cursor.execute(sql, tuple(params) + (termo, limit))
         return [
-            {"nome": row[0], "cargo": row[1], "uf": row[2], "orgao": row[3]}
+            {
+                "nome": row[0],
+                "cargo": row[1],
+                "uf": row[2],
+                "orgao": row[3],
+                "remuneracao": float(row[4]) if row[4] is not None else 0.0,
+                "status": row[5],
+                "tipo_aposentadoria": row[6],
+                "data_aposentadoria": str(row[7]) if row[7] else None,
+                "tipo_ingresso": row[8],
+                "data_ingresso": str(row[9]) if row[9] else None,
+            }
             for row in cursor.fetchall()
         ]
     finally:
