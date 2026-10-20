@@ -1,7 +1,10 @@
+import contextlib
 import csv
 import io
 import os
+import sys
 import time
+import zipfile
 
 import psycopg2
 from dotenv import load_dotenv
@@ -21,6 +24,10 @@ CSV_ATIVOS = "carreira_limpo.csv"
 # Variável de controle: True insere apenas 20 linhas, False insere tudo
 AMOSTRA = False
 
+# Por padrão, o script NÃO reimporta se o banco já tem dados (assim pode rodar a cada
+# `docker compose up` sem custo). FORCAR_IMPORTACAO=1 apaga e reimporta tudo.
+FORCAR = os.getenv("FORCAR_IMPORTACAO", "0") == "1"
+
 # Quantas linhas são enviadas ao Postgres por vez (controla uso de memória)
 TAMANHO_BLOCO = 50_000
 
@@ -37,6 +44,43 @@ COLUNS_DB_APOSENTADOS = ["id", "nome", "cpf", "matricula", "orgao", "sigla_orgao
 NULL_MARK = "\\N"
 
 
+@contextlib.contextmanager
+def abrir_csv(caminho_csv):
+    """Abre o CSV para leitura em texto.
+
+    Os CSVs são grandes demais para o git, então o repositório guarda só os .zip.
+    Se o .csv existir (por exemplo, recém-gerado pelos clear_*.py), ele tem prioridade;
+    senão o arquivo é lido direto de dentro do .zip de mesmo nome, em streaming,
+    sem extrair nada para o disco.
+    """
+    if os.path.exists(caminho_csv):
+        print(f"  Lendo {caminho_csv}")
+        with open(caminho_csv, mode="r", encoding="utf-8-sig", newline="") as f:
+            yield f
+        return
+
+    caminho_zip = os.path.splitext(caminho_csv)[0] + ".zip"
+    if not os.path.exists(caminho_zip):
+        raise FileNotFoundError(f"não encontrei {caminho_csv} nem {caminho_zip}")
+
+    with zipfile.ZipFile(caminho_zip) as zf:
+        # Ignora pastas e lixo de macOS; aceita o CSV mesmo dentro de uma subpasta.
+        csvs = [n for n in zf.namelist() if n.lower().endswith(".csv") and not n.startswith("__MACOSX")]
+        base = os.path.basename(caminho_csv).lower()
+        exato = [n for n in csvs if os.path.basename(n).lower() == base]
+        if len(exato) == 1:
+            membro = exato[0]
+        elif len(csvs) == 1:
+            membro = csvs[0]
+        else:
+            raise FileNotFoundError(f"não consegui escolher o CSV dentro de {caminho_zip}: {csvs}")
+
+        print(f"  Lendo {membro} de dentro de {caminho_zip}")
+        with zf.open(membro) as bruto:
+            # utf-8-sig tolera um BOM no início, caso o zip tenha sido gerado no Windows
+            yield io.TextIOWrapper(bruto, encoding="utf-8-sig", newline="")
+
+
 def copiar_csv(cursor, caminho_csv, tabela, colunas_csv, colunas_db):
     """Lê o CSV e envia para a tabela com COPY, em blocos. Retorna o total de linhas."""
     sql_copy = (
@@ -46,7 +90,7 @@ def copiar_csv(cursor, caminho_csv, tabela, colunas_csv, colunas_db):
     total = 0
     nomes_vazios = 0
 
-    with open(caminho_csv, mode="r", encoding="utf-8", newline="") as f:
+    with abrir_csv(caminho_csv) as f:
         leitor = csv.reader(f)
         cabecalho = next(leitor)
         indices = [cabecalho.index(coluna) for coluna in colunas_csv]
@@ -100,6 +144,15 @@ def insert_data():
         cursor = conection.cursor()
         inicio = time.time()
 
+        # Se as duas tabelas já têm dados, não faz nada (a menos que FORCAR_IMPORTACAO=1).
+        # Isso torna seguro rodar o script em todo `up`: só importa quando o banco está vazio.
+        cursor.execute("SELECT (SELECT count(*) FROM servidores_ativos), (SELECT count(*) FROM servidores_aposentados);")
+        ja_ativos, ja_aposentados = cursor.fetchone()
+        if ja_ativos > 0 and ja_aposentados > 0 and not FORCAR:
+            print(f"Banco já populado ({ja_ativos:,} ativos, {ja_aposentados:,} aposentados). Nada a fazer.")
+            print("Use FORCAR_IMPORTACAO=1 para apagar e reimportar.")
+            return
+
         # Limpa as tabelas antes de iniciar a importação para evitar duplicidade.
         # Tudo roda numa única transação: se algo falhar, o rollback restaura os dados antigos.
         print("Limpando dados antigos...")
@@ -126,10 +179,12 @@ def insert_data():
         print(f"Erro de cabeçalho: O nome de uma coluna procurada não existe no CSV. Detalhes: {e}")
         if conection:
             conection.rollback()
+        sys.exit(1)
     except (Exception, psycopg2.Error) as error:
         print("Falha ao inserir dados:", error)
         if conection:
             conection.rollback()
+        sys.exit(1)  # o compose usa esse código para saber se o ETL terminou bem
 
     finally:
         if cursor:

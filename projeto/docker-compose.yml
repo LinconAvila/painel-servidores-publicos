@@ -19,24 +19,28 @@ services:
       retries: 10
       start_period: 10s
 
+  # Importa os CSVs para o banco. Roda a cada `docker compose up`, mas o script só importa
+  # quando as tabelas estão vazias (ou com FORCAR_IMPORTACAO=1). Os CSVs ficam em db/etl/.
   etl:
-    image: python:3.12-slim
-    profiles: ["etl"]          # só roda quando você chamar de propósito
+    build:
+      context: ./db/etl
+    container_name: painel-etl
+    restart: "no"
     working_dir: /etl
     volumes:
-      - ./db/etl:/etl          # script e CSVs ficam em projeto/db/etl/
+      - ./db/etl:/etl
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      FORCAR_IMPORTACAO: ${FORCAR_IMPORTACAO:-0}
     depends_on:
       db:
         condition: service_healthy
     networks:
       - painel-net
-    command: sh -c "pip install -q psycopg2-binary python-dotenv && python importacao.py"
 
   backend:
     build:
@@ -60,6 +64,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      etl:
+        condition: service_completed_successfully
     networks:
       - painel-net
 

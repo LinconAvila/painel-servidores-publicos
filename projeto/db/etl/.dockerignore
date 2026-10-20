@@ -1,0 +1,8 @@
+# Os CSVs são lidos pelo volume, não pela build. Sem isto, a build enviaria ~130 MB ao Docker.
+*.csv
+*.zip
+*.CSV
+*.txt
+*.TXT
+.venv/
+__pycache__/
