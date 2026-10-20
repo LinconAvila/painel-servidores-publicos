@@ -353,6 +353,31 @@
   flex-shrink: 0;
 }
 
+.result-badge-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.result-remuneracao {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-petrol);
+  white-space: nowrap;
+}
+
+.result-detail-tag {
+  font-size: 0.75rem;
+  color: var(--color-secondary);
+  margin-top: 4px;
+  display: inline-block;
+  background-color: #F3F4F6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 .chevron {
   font-size: 1.1rem;
   color: #9CA3AF;
@@ -551,6 +576,13 @@
   color: var(--color-charcoal);
   text-align: right;
   word-break: break-word;
+}
+
+.detail-field-value.highlight {
+  color: var(--color-petrol);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.9375rem;
 }
 
 /* Responsividade específica da tela de Detalhes no mobile */

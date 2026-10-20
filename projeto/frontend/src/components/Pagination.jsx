@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function Pagination({ page, totalPages, onChange }) {
   if (totalPages <= 1) return null;
