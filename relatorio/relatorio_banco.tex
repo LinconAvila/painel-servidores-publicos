@@ -1,0 +1,239 @@
+\documentclass[12pt,a4paper]{article}
+
+% ------------------------------------------------------------
+% Pacotes
+% ------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{float}    % permite usar [H] para fixar tabelas no lugar
+\usepackage[hidelinks]{hyperref}
+
+\setlist[itemize]{itemsep=2pt, topsep=4pt}
+
+% Estilo dos trechos de código
+\lstset{
+  language=SQL,
+  basicstyle=\ttfamily\footnotesize,
+  frame=single,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  showstringspaces=false,
+  xleftmargin=0pt,
+  aboveskip=1em,
+  belowskip=1em
+}
+
+% ------------------------------------------------------------
+% PREENCHA AQUI: dados da capa
+% ------------------------------------------------------------
+\newcommand{\universidade}{Universidade Federal do Rio Grande -- FURG}
+\newcommand{\disciplina}{Sistemas para Internet II}
+\newcommand{\titulo}{Banco de dados}
+\newcommand{\cidade}{Rio Grande}
+\newcommand{\datacapa}{outubro de 2026}   % data escrita em português
+
+% Textos em português (garantem português mesmo se o babel falhar)
+\renewcommand{\figurename}{Figura}
+\renewcommand{\tablename}{Tabela}
+\renewcommand{\refname}{Referências}
+
+\begin{document}
+
+% ------------------------------------------------------------
+% Capa
+% ------------------------------------------------------------
+\begin{titlepage}
+  \centering
+  {\Large \textbf{\universidade}\par}
+  \vspace{1cm}
+  {\large \disciplina\par}
+  \vspace{3cm}
+  {\LARGE \textbf{\titulo}\par}
+  \vspace{3cm}
+  {\large \textbf{Alunos:}\par}
+  \vspace{0.4cm}
+  {\large
+    Lincon Avila de Souza -- Matrícula 162571\par
+    Lucas Derick Silva Pereira -- Matrícula 162547\par
+    Miguel Casarin da Silva -- Matrícula 162575\par}
+  \vfill
+  {\large \cidade, \datacapa\par}
+\end{titlepage}
+
+% O conteúdo do relatório começa aqui (sem sumário)
+
+\section{Dados e Obtenção}
+
+O banco de dados do projeto foi populado utilizando informações públicas extraídas do Portal de Dados Abertos, focando nos registros de servidores federais ativos (carreiras e cargos) e aposentados do Poder Executivo Federal Civil. Os dados brutos são disponibilizados em arquivos de texto e planilhas estruturadas, acompanhados por dicionários oficiais que descrevem detalhadamente os campos disponíveis.
+
+\subsection{Dataset de Servidores Aposentados}
+O arquivo voltado aos aposentados contempla o cadastro de inativos sob o regime jurídico único federal. Os principais campos extraídos e tratados a partir do dicionário original englobam:
+\begin{itemize}
+    \item \textbf{Nome}: Nome completo do servidor aposentado.
+    \item \textbf{CPF}: Número de inscrição na Receita Federal, protegido por máscara de segurança.
+    \item \textbf{Matrícula}: Identificador numérico exclusivo da matrícula do servidor.
+    \item \textbf{Órgão e Sigla}: Nome e sigla do órgão público federal responsável pela dotação orçamentária vinculada.
+    \item \textbf{Cargo}: Denominação do cargo efetivo que deu origem à aposentadoria.
+    \item \textbf{Tipos e Legislação}: Informações complementares referentes ao tipo de aposentadoria, fundamentação legal e dados do diploma de publicação.
+    \item \textbf{Ingresso e Proventos}: Data de ingresso no serviço público e valor líquido correspondente ao provento recebido.
+\end{itemize}
+
+\subsection{Dataset de Servidores Ativos (Carreiras e Cargos)}
+O arquivo correspondente aos servidores ativos descreve o quadro de pessoal em atividade no âmbito do Poder Executivo Federal. Os campos essenciais identificados no dicionário de dados compreendem:
+\begin{itemize}
+    \item \textbf{Nome}: Nome completo do servidor ou empregado público.
+    \item \textbf{CPF}: Número de cadastro de pessoa física mascarado.
+    \item \textbf{Código da Carreira}: Código identificador do agrupamento profissional.
+    \item \textbf{Descrição do Cargo}: Nome do cargo ou emprego público ocupado no plano de carreiras.
+    \item \textbf{UF da UPAG}: Sigla da Unidade Federativa da Unidade Pagadora de vinculação.
+    \item \textbf{Órgão de Atuação}: Nome do órgão orçamentário ao qual o trabalhador está vinculado.
+    \item \textbf{Remuneração}: Valor líquido percebido pelo servidor durante o mês de referência.
+\end{itemize}
+
+\section{Exploração e testes na base de dados}
+
+A fim de buscar possíveis candidatos a identificadores únicos, foram realizados testes com os arquivos \textit{CSV} sem tratamento. Identificou-se que nenhum campo era único na base de dados, havendo repetições, além de a \textbf{UF} não estar disponível no \textit{dataset} de aposentados. Outro ponto importante foi a observação de que o campo \textbf{CPF} possui seus dígitos identificadores substituídos por asteriscos, o que impediu o uso do \textbf{CPF} como chave entre as tabelas.
+
+Os testes foram conduzidos através de \textit{queries} SQL, carregando os arquivos \textit{CSV} por meio do \textit{DuckDB} (banco de dados simples, que pode ser usado pelo terminal e cujo uso é focado em análise de dados). Foram usadas \textit{queries} como a seguinte para verificar repetição em colunas nas tabelas:
+
+\begin{lstlisting}
+SELECT nome, COUNT(*) AS qtd
+FROM read_csv_auto('CARREIRA_072026.csv')
+GROUP BY nome
+HAVING COUNT(*) > 1
+ORDER BY qtd DESC;
+\end{lstlisting}
+
+\section{Tratamento dos dados}
+O tratamento dos dados foi realizado por meio dos \textit{scripts} escritos em \textit{Python} \textbf{\texttt{clear\_aposentados.py}} e \textbf{\texttt{clear\_carreira.py}}, disponíveis no diretório \textbf{\texttt{./db/etl}}.
+
+Estes \textit{scripts} executam a limpeza e padronização dos arquivos brutos para garantir a compatibilidade com o SGBD. Em suma, as rotinas realizam as seguintes etapas:
+\begin{itemize}
+    \item \textbf{Remoção de caracteres inválidos}: O \textit{script} de aposentados limpa \textit{bytes} nulos e ajusta a codificação de caracteres (\textit{latin1} para \textit{UTF-8}) para evitar falhas de leitura.
+    \item \textbf{Padronização de valores monetários}: Ambos os códigos convertem campos de remuneração e proventos do padrão brasileiro (com vírgulas para decimais e pontos para milhares) para o formato numérico padrão de banco de dados (ponto decimal).
+    \item \textbf{Normalização de datas}: Conversão de campos textuais e de data para o formato padrão ISO (\texttt{YYYY-MM-DD}). No caso da carreira, a data de referência é gerada dinamicamente com base no mês informado e no ano extraído do nome do arquivo.
+    \item \textbf{Garantia de integridade e estruturação}: Os dados limpos são salvos em novos arquivos delimitados por vírgulas (\textit{CSV}), padronizados com os cabeçalhos esperados pelas tabelas do banco de dados.
+\end{itemize}
+
+\section{Dicionário de Dados}
+
+O projeto optou por não utilizar todas as colunas contidas nos arquivos do Portal de Dados Abertos. Ao todo, o \textit{dataset} de servidores ativos obteve um volume de 1.090.896 registros após a limpeza, enquanto o \textit{dataset} de aposentados obteve 677 registros, distribuídos nos seguintes campos:
+
+\begin{table}[H]
+\centering
+\caption{Dicionário de dados da tabela \texttt{servidores\_ativos}.}
+\label{tab:dicionario_ativos}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Coluna (Schema Final)} & \textbf{Tipo SQL} & \textbf{Campo Original} & \textbf{Descrição / Formato} \\
+\midrule
+\texttt{id} & BIGINT PK & -- & Chave substituta (\textit{surrogate key}) \\
+\texttt{nome} & VARCHAR(255) & Nome & Nome do servidor/empregado público \\
+\texttt{cpf} & VARCHAR(11) & CPF & CPF mascarado (\texttt{***NNNNNN**}) \\
+\texttt{codigo\_carreira} & VARCHAR(3) & Código da Carreira & Código de classes da profissão \\
+\texttt{cargo} & VARCHAR(45) & Descrição do Cargo & Nome do cargo ou emprego ocupado \\
+\texttt{uf} & VARCHAR(2) & UF da UPAG & Sigla da UF da unidade pagadora \\
+\texttt{orgao} & VARCHAR(45) & Denominação do Órgão & Órgão federal de vínculo \\
+\texttt{remuneracao} & NUMERIC(20,2) & Valor da Remuneração & Rendimento líquido recebido \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Dicionário de dados da tabela \texttt{servidores\_aposentados}.}
+\label{tab:dicionario_aposentados}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Coluna (Schema Final)} & \textbf{Tipo SQL} & \textbf{Campo Original} & \textbf{Descrição / Formato} \\
+\midrule
+\texttt{id} & BIGINT PK & -- & Chave substituta (\textit{surrogate key}) \\
+\texttt{nome} & VARCHAR(255) & Nome & Nome completo do aposentado \\
+\texttt{cpf} & VARCHAR(11) & CPF & CPF parcialmente mascarado \\
+\texttt{matricula} & BIGINT & Matrícula do Servidor & Matrícula do servidor (\texttt{OOOOOMMMMMMM}) \\
+\texttt{orgao} & VARCHAR(45) & Nome do Órgão & Nome do órgão de vínculo \\
+\texttt{sigla\_orgao} & VARCHAR(255) & Sigla do Órgão & Sigla institucional do órgão \\
+\texttt{cargo} & VARCHAR(45) & Cargo & Cargo originário da aposentadoria \\
+\texttt{tipo\_aposentadoria} & VARCHAR(255) & Tipo de Aposentadoria & Classificação sistêmica do tipo \\
+\texttt{data\_aposentadoria} & DATE & Data publicação Diploma & Data de publicação legal \\
+\texttt{tipo\_ingresso} & VARCHAR(255) & Ocorrência de ingresso & Tipo de ingresso no serviço público \\
+\texttt{data\_ingresso} & DATE & Data ocorrência ingresso & Data efetiva de ingresso \\
+\texttt{remuneracao} & NUMERIC(20,2) & Valor do Rendimento Líquido & Valor do provento líquido \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\clearpage
+
+\section{Tabelas e índices}
+
+Para a persistência dos dados e a garantia de desempenho nas consultas, o SGBD PostgreSQL foi estruturado com duas tabelas principais e independentes (\texttt{servidores\_ativos} e \texttt{servidores\_aposentados}), além de índices otimizados para buscas exatas, compostas e por similaridade.
+
+\begin{lstlisting}
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE servidores_ativos (
+    id BIGINT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    cpf VARCHAR(11) NOT NULL, -- CPF censurado; nao restrito como UNIQUE devido a duplicatas de origem
+    codigo_carreira VARCHAR(3) NOT NULL,
+    cargo VARCHAR(45) NOT NULL,
+    uf VARCHAR(2) NOT NULL,
+    orgao VARCHAR(45) NOT NULL,
+    remuneracao NUMERIC(20,2) NOT NULL
+);
+
+CREATE TABLE servidores_aposentados (
+    id BIGINT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    cpf VARCHAR(11) NOT NULL,
+    matricula BIGINT NOT NULL,
+    orgao VARCHAR(45) NOT NULL,
+    sigla_orgao VARCHAR(255) NOT NULL,
+    cargo VARCHAR(45) NOT NULL,
+    tipo_aposentadoria VARCHAR(255) NOT NULL,
+    data_aposentadoria date NOT NULL,
+    tipo_ingresso VARCHAR(255) NOT NULL,
+    data_ingresso date NOT NULL,
+    remuneracao NUMERIC(20,2) NOT NULL
+);
+
+-- Indices B-tree para buscas exatas isoladas
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_nome ON servidores_ativos USING BTREE (nome);
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_cargo ON servidores_ativos USING BTREE (cargo);
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_uf ON servidores_ativos USING BTREE (uf);
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_orgao ON servidores_ativos USING BTREE (orgao);
+
+CREATE INDEX IF NOT EXISTS idx_servidores_aposentados_nome ON servidores_aposentados USING BTREE (nome);
+CREATE INDEX IF NOT EXISTS idx_servidores_aposentados_cargo ON servidores_aposentados USING BTREE (cargo);
+CREATE INDEX IF NOT EXISTS idx_servidores_aposentados_orgao ON servidores_aposentados USING BTREE (orgao);
+
+-- Indices em minusculo para otimizacao de busca
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_nome_lower ON servidores_ativos USING BTREE (LOWER(nome));
+CREATE INDEX IF NOT EXISTS idx_servidores_aposentados_nome_lower ON servidores_aposentados USING BTREE (LOWER(nome));
+
+-- Indices compostos para multiplos filtros simultaneos
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_cargo_uf ON servidores_ativos USING BTREE (cargo, uf);
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_orgao_uf ON servidores_ativos USING BTREE (orgao, uf);
+
+-- Indices GIN com pg_trgm para busca por similaridade 
+CREATE INDEX IF NOT EXISTS idx_servidores_ativos_nome_trgm ON servidores_ativos USING GIN (nome gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_servidores_aposentados_nome_trgm ON servidores_aposentados USING GIN (nome gin_trgm_ops);
+\end{lstlisting}
+
+\end{document}
