@@ -13,8 +13,18 @@ const LIMITE_SIMILARIDADE_PADRAO = 100;
 const LIMITE_SIMILARIDADE_MAX = 500;
 
 function formatarServidor(item, id) {
-  const isAposentado = item.status === 'aposentado' || item.status === 'Aposentado' || !item.uf;
+  const statusStr = (item.status || '').toLowerCase();
+
+  const isAposentado = statusStr ? statusStr === 'aposentado' : !item.uf;
   const status = isAposentado ? 'Aposentado' : 'Ativo';
+
+
+  const remuneracaoNum =
+    typeof item.remuneracao === 'number'
+      ? item.remuneracao
+      : item.remuneracao
+        ? parseFloat(item.remuneracao)
+        : 0.0;
 
   return {
     id: item.id || id,
@@ -26,10 +36,14 @@ function formatarServidor(item, id) {
     siglaOrgao: item.sigla_orgao || item.siglaOrgao || null,
     carreira: item.codigo_carreira || item.carreira || null,
     matricula: item.matricula || null,
+    remuneracao: isNaN(remuneracaoNum) ? 0.0 : remuneracaoNum,
+    tipoIngresso: item.tipo_ingresso || item.tipoIngresso || null,
     dataIngresso: item.data_ingresso || item.dataIngresso || null,
     tipoAposentadoria: item.tipo_aposentadoria || item.tipoAposentadoria || null,
+    dataAposentadoria: item.data_aposentadoria || item.dataAposentadoria || null,
   };
 }
+
 
 function App() {
   const [view, setView] = useState('search');

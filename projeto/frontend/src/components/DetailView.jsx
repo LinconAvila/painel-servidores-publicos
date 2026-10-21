@@ -1,18 +1,22 @@
-import React from 'react';
 import { Avatar } from './Avatar';
 import { StatusBadge } from './StatusBadge';
+import { formatarMoeda, formatarData } from '../utils/formatters';
 
-function DetailField({ label, value }) {
+function DetailField({ label, value, highlight = false }) {
+  if (value === null || value === undefined || value === '') return null;
+
   return (
     <div className="detail-field-row">
       <span className="detail-field-label">{label}</span>
-      <span className="detail-field-value">{value ?? '—'}</span>
+      <span className={`detail-field-value ${highlight ? 'highlight' : ''}`}>
+        {value}
+      </span>
     </div>
   );
 }
 
 export function DetailView({ servidor, onBack }) {
-  const isAtivo = servidor.status === 'Ativo';
+  const isAtivo = (servidor.status || '').toLowerCase() === 'ativo';
 
   return (
     <div className="detail-container">
@@ -35,6 +39,11 @@ export function DetailView({ servidor, onBack }) {
         <div className="detail-divider" />
 
         <div className="detail-fields">
+          <DetailField
+            label="Remuneração"
+            value={formatarMoeda(servidor.remuneracao)}
+            highlight
+          />
           <DetailField label="Órgão" value={servidor.orgao} />
           {servidor.siglaOrgao && (
             <DetailField label="Sigla do órgão" value={servidor.siglaOrgao} />
@@ -49,11 +58,17 @@ export function DetailView({ servidor, onBack }) {
           {servidor.matricula && (
             <DetailField label="Matrícula" value={servidor.matricula} />
           )}
-          {servidor.dataIngresso && (
-            <DetailField label="Data de ingresso" value={servidor.dataIngresso} />
+          {servidor.tipoIngresso && (
+            <DetailField label="Tipo de ingresso" value={servidor.tipoIngresso} />
           )}
-          {servidor.tipoAposentadoria && (
+          {servidor.dataIngresso && (
+            <DetailField label="Data de ingresso" value={formatarData(servidor.dataIngresso)} />
+          )}
+          {!isAtivo && servidor.tipoAposentadoria && (
             <DetailField label="Tipo de aposentadoria" value={servidor.tipoAposentadoria} />
+          )}
+          {!isAtivo && servidor.dataAposentadoria && (
+            <DetailField label="Data de aposentadoria" value={formatarData(servidor.dataAposentadoria)} />
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
-import React from 'react';
 import { StatusBadge } from './StatusBadge';
 import { EmptyState } from './EmptyState';
 import { Pagination } from './Pagination';
+import { formatarMoeda, formatarData } from '../utils/formatters';
 
 export function ResultsArea({
   resultados,
@@ -60,9 +60,22 @@ export function ResultsArea({
                 {item.uf ? ` · ${item.uf}` : ''}
                 {` · ${item.orgao}`}
               </p>
+              {item.status === 'Aposentado' && (item.tipoAposentadoria || item.dataAposentadoria) && (
+                <p className="result-detail-tag">
+                  {item.tipoAposentadoria ? item.tipoAposentadoria : 'Aposentado'}
+                  {item.dataAposentadoria ? ` · ${formatarData(item.dataAposentadoria)}` : ''}
+                </p>
+              )}
             </div>
             <div className="result-right">
-              <StatusBadge status={item.status} />
+              <div className="result-badge-col">
+                <StatusBadge status={item.status} />
+                {item.remuneracao !== undefined && item.remuneracao !== null && (
+                  <span className="result-remuneracao">
+                    {formatarMoeda(item.remuneracao)}
+                  </span>
+                )}
+              </div>
               <span className="chevron">›</span>
             </div>
           </button>

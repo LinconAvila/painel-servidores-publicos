@@ -1,4 +1,3 @@
-import React from 'react';
 
 const UFS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA',

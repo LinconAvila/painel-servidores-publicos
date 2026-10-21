@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function Header() {
   return (
@@ -23,9 +22,6 @@ export function Header() {
           <span className="header-title">
             Painel de Servidores Públicos
           </span>
-        </div>
-        <div className="header-badge">
-          <span>SIAPE</span>
         </div>
       </div>
     </header>
